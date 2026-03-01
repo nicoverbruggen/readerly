@@ -1,67 +1,238 @@
+"""
+FontForge: Set Vertical Metrics
+───────────────────────────────
+Follows the Google Fonts vertical-metrics methodology:
+
+  • OS/2 Typo  → controls line spacing  (with USE_TYPO_METRICS / fsSelection bit 7)
+  • OS/2 Win   → clipping boundary on Windows  (must cover every glyph)
+  • hhea       → line spacing + clipping on macOS/iOS
+
+Run inside FontForge  (File → Execute Script → paste, or fontforge -script).
+"""
+
 import fontforge
+import math
 
 f = fontforge.activeFont()
 
-CAPS = list("ABCDEFGHIJKLMNOPQRSTUVWXYZ")
-DESCENT_GLYPHS = list("gjpqy")
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# CONFIGURATION
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-# ── Tweak these ───────────────────────────────────────────────────────────────
-LINE_GAP_FACTOR = 0.0   # 0.15 = 15% gap, 0.0 = no gap
-OVERLAP_FACTOR  = 0.0    # 0.0 = no overlap, 0.05 = 5% overlap (overrides gap)
-# ─────────────────────────────────────────────────────────────────────────────
+# Desired line height as a multiple of UPM.
+#   1.0  = no extra leading (glyphs may touch between lines)
+#   1.2  = 120% — a solid default for body text
+#   1.25 = matches the CSS default for most browsers
+#   1.5  = generous (double-spaced feel)
+LINE_HEIGHT = 1.1
 
-def measure(glyphs, use_max=True):
-    values = []
-    for ch in glyphs:
+# Extra padding on Win and hhea metrics, as a fraction of UPM.
+# Prevents clipping of glyphs that sit right at the bounding-box edge.
+#   0.0  = trust the bounding boxes exactly
+#   0.01 = 1% pad (conservative)
+#   0.02 = 2% pad (safe for hinting artefacts / composites)
+CLIP_MARGIN = 0.01
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# HELPERS
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+def _bbox(name):
+    """Return bounding box (xmin, ymin, xmax, ymax) or None."""
+    if name in f and f[name].isWorthOutputting():
+        bb = f[name].boundingBox()
+        if bb != (0, 0, 0, 0):          # skip empty glyphs (space, CR, …)
+            return bb
+    return None
+
+
+def measure_chars(chars, *, axis="top"):
+    """
+    Measure a set of reference characters.
+      axis="top"    → return the highest yMax  (ascenders, cap height)
+      axis="bottom" → return the lowest  yMin  (descenders)
+    Returns (value, display_char) or (None, None).
+    """
+    idx   = 3 if axis == "top" else 1
+    pick  = max if axis == "top" else min
+    hits  = []
+    for ch in chars:
         name = fontforge.nameFromUnicode(ord(ch))
-        if name in f and f[name].isWorthOutputting():
-            bb = f[name].boundingBox()
-            values.append(bb[3] if use_max else bb[1])
-    if not values:
-        return None
-    return max(values) if use_max else min(values)
+        bb   = _bbox(name)
+        if bb is not None:
+            hits.append((bb[idx], ch))
+    if not hits:
+        return None, None
+    return pick(hits, key=lambda t: t[0])
 
-ascent  = measure(CAPS, use_max=True)
-descent = measure(DESCENT_GLYPHS, use_max=False)
 
-print(f"Measured ascent:  {ascent}")
-print(f"Measured descent: {descent}")
+def scan_font_extremes():
+    """Walk every output glyph; return (yMax, yMin, max_name, min_name)."""
+    y_max, y_min     = 0, 0
+    max_nm, min_nm   = None, None
+    for g in f.glyphs():
+        if not g.isWorthOutputting():
+            continue
+        bb = g.boundingBox()
+        if bb == (0, 0, 0, 0):
+            continue
+        if bb[3] > y_max:
+            y_max, max_nm = bb[3], g.glyphname
+        if bb[1] < y_min:
+            y_min, min_nm = bb[1], g.glyphname
+    return y_max, y_min, max_nm, min_nm
 
-if ascent is None or descent is None:
-    print("Could not measure glyphs — check glyph names in your font.")
-else:
-    ascent_val  = int(ascent)
-    descent_val = int(descent)
 
-    # Rescale to preserve original UPM
-    upm   = f.em
-    total = ascent_val + abs(descent_val)
-    ascent_val  =  int(ascent_val        * (upm / total))
-    descent_val = -int(abs(descent_val)  * (upm / total))
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# STEP 1 — Measure design landmarks
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    print(f"Rescaled to UPM {upm} — Ascent: {ascent_val}, Descent: {descent_val}")
+print("─── Design landmarks ───\n")
 
-    overlap      = int(ascent_val * OVERLAP_FACTOR)
-    half_overlap = overlap // 2
-    line_gap     = int(ascent_val * LINE_GAP_FACTOR) if OVERLAP_FACTOR == 0.0 else 0
+cap_h, cap_c = measure_chars("HIOXE",    axis="top")
+asc_h, asc_c = measure_chars("bdfhkl",   axis="top")
+xht_h, xht_c = measure_chars("xzouv",    axis="top")
+dsc_h, dsc_c = measure_chars("gpqyj",    axis="bottom")
 
-    f.ascent         = ascent_val
-    f.os2_typoascent = ascent_val - half_overlap
-    f.hhea_ascent    = ascent_val - half_overlap
-    f.os2_winascent  = ascent_val - half_overlap
+for label, val, ch in [("Cap height", cap_h, cap_c),
+                        ("Ascender",   asc_h, asc_c),
+                        ("x-height",   xht_h, xht_c),
+                        ("Descender",  dsc_h, dsc_c)]:
+    if val is not None:
+        print(f"  {label:12s}  {int(val):>6}  ('{ch}')")
+    else:
+        print(f"  {label:12s}  {'N/A':>6}")
 
-    f.descent         = abs(descent_val)
-    f.os2_typodescent = descent_val + half_overlap
-    f.hhea_descent    = descent_val + half_overlap
-    f.os2_windescent  = abs(descent_val) - half_overlap
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# STEP 2 — Full-font bounding-box scan
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    f.os2_typolinegap = line_gap
-    f.hhea_linegap    = line_gap
+print("\n─── Full font scan ───\n")
 
-    try:
-        f.os2_stylemap = f.os2_stylemap | (1 << 7)
-    except AttributeError:
-        print("Note: set USE_TYPO_METRICS manually in Font Info > OS/2")
+font_ymax, font_ymin, ymax_name, ymin_name = scan_font_extremes()
+print(f"  Highest glyph:  {int(font_ymax):>6}  ({ymax_name})")
+print(f"  Lowest  glyph:  {int(font_ymin):>6}  ({ymin_name})")
 
-    line_height = (ascent_val - half_overlap) + (abs(descent_val) - half_overlap) + line_gap
-    print(f"Line gap: {line_gap}, Overlap: {overlap}, Effective line height: {line_height}")
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# STEP 3 — Compute the three metric sets
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+upm = f.em
+
+# Design top = tallest Latin ascender (fall back to cap height)
+design_top = asc_h if asc_h is not None else cap_h
+design_bot = dsc_h   # negative value
+
+if design_top is None or design_bot is None:
+    raise SystemExit(
+        "ERROR: Could not measure ascender/cap-height or descender.\n"
+        "       Make sure your font contains basic Latin glyphs (H, b, p, etc.)."
+    )
+
+# ── OS/2 Typo metrics ────────────────────────────────────────────────────────
+# These define line spacing when USE_TYPO_METRICS is on.
+# Strategy: ascender and descender sit at the design's actual ink boundaries;
+#           lineGap absorbs all extra leading.  This keeps the text vertically
+#           centred on the line, which matters for UI / web layout.
+
+typo_ascender  = int(round(design_top))
+typo_descender = int(round(design_bot))          # negative
+typo_extent    = typo_ascender - typo_descender   # total ink span (positive)
+desired_lh     = int(round(upm * LINE_HEIGHT))
+typo_linegap   = max(0, desired_lh - typo_extent)
+
+# ── OS/2 Win metrics ─────────────────────────────────────────────────────────
+# Clipping boundaries on Windows.  Must cover every glyph or Windows clips them.
+# usWinDescent is a *positive* distance below the baseline (unlike Typo/hhea).
+
+margin       = int(math.ceil(upm * CLIP_MARGIN))
+win_ascent   = int(math.ceil(max(font_ymax, design_top)))  + margin
+win_descent  = int(math.ceil(max(abs(font_ymin), abs(design_bot)))) + margin
+
+# ── hhea metrics ──────────────────────────────────────────────────────────────
+# macOS/iOS always uses hhea for *both* line spacing and clipping (it ignores
+# USE_TYPO_METRICS).  To keep line height consistent across platforms, we fold
+# the Typo lineGap into hhea ascent/descent so hhea_lineGap can be 0.
+# Then we take the max with the font bbox to also prevent Mac clipping.
+
+half_gap  = typo_linegap // 2
+extra     = typo_linegap - 2 * half_gap   # +1 rounding remainder → ascent side
+
+spacing_asc = typo_ascender  + half_gap + extra
+spacing_dsc = typo_descender - half_gap          # more negative
+
+hhea_ascent  = max(spacing_asc, int(math.ceil(font_ymax))  + margin)
+hhea_descent = min(spacing_dsc, int(math.floor(font_ymin)) - margin)  # negative
+hhea_linegap = 0
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# STEP 4 — Apply to font
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+# FontForge's own ascent / descent (used for UPM split in the head table)
+f.ascent  = typo_ascender
+f.descent = abs(typo_descender)
+
+# OS/2 table
+f.os2_typoascent    = typo_ascender
+f.os2_typodescent    = typo_descender
+f.os2_typolinegap    = typo_linegap
+f.os2_winascent      = win_ascent
+f.os2_windescent     = win_descent
+
+# hhea table
+f.hhea_ascent        = hhea_ascent
+f.hhea_descent       = hhea_descent
+f.hhea_linegap       = hhea_linegap
+
+# USE_TYPO_METRICS — fsSelection bit 7
+# FontForge exposes this differently across versions.  We try three known paths.
+typo_metrics_set = False
+
+# Method 1: dedicated boolean (FontForge ≥ 2020-ish)
+if hasattr(f, "os2_use_typo_metrics"):
+    f.os2_use_typo_metrics = True
+    typo_metrics_set = True
+
+# Method 2: direct fsSelection manipulation (if exposed)
+if not typo_metrics_set and hasattr(f, "os2_fsselection"):
+    f.os2_fsselection |= (1 << 7)
+    typo_metrics_set = True
+
+# Method 3: via the OS/2 version (some builds gate the flag on version ≥ 4)
+if not typo_metrics_set:
+    if hasattr(f, "os2_version") and f.os2_version < 4:
+        f.os2_version = 4
+
+if not typo_metrics_set:
+    print("⚠  Could not set USE_TYPO_METRICS programmatically.")
+    print("   → In Font Info → OS/2 → Misc, tick 'USE_TYPO_METRICS'.\n")
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# STEP 5 — Report
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+typo_line  = typo_ascender - typo_descender + typo_linegap
+hhea_line  = hhea_ascent   - hhea_descent   + hhea_linegap
+win_total  = win_ascent    + win_descent
+
+print("\n─── Applied metrics ───\n")
+print(f"  UPM:  {upm}\n")
+
+print(f"  {'':18s}  {'Ascender':>9s}  {'Descender':>10s}  {'LineGap':>8s}  {'Total':>6s}")
+print(f"  {'─'*18}  {'─'*9}  {'─'*10}  {'─'*8}  {'─'*6}")
+print(f"  {'OS/2 Typo':18s}  {typo_ascender:>9d}  {typo_descender:>10d}  {typo_linegap:>8d}  {typo_line:>6d}")
+print(f"  {'hhea':18s}  {hhea_ascent:>9d}  {hhea_descent:>10d}  {hhea_linegap:>8d}  {hhea_line:>6d}")
+print(f"  {'OS/2 Win':18s}  {win_ascent:>9d}  {'-'+str(win_descent):>10s}  {'n/a':>8s}  {win_total:>6d}")
+
+print(f"\n  Effective line height:  {typo_line}  ({typo_line/upm:.2f}× UPM)")
+print(f"  Design ink span:       {typo_extent}  ({typo_extent/upm:.2f}× UPM)")
+print(f"  Clipping headroom:     +{win_ascent - int(round(font_ymax))} above, "
+      f"+{win_descent - int(round(abs(font_ymin)))} below")
+
+if cap_h is not None:
+    print(f"\n  Cap height:   {int(cap_h)}")
+if xht_h is not None:
+    print(f"  x-height:     {int(xht_h)}")
+
+print("\nDone. Review in Font Info → OS/2 and Font Info → General.")
