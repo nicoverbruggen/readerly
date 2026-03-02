@@ -19,13 +19,6 @@ f = fontforge.activeFont()
 # CONFIGURATION
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-# Desired line height as a multiple of UPM.
-#   1.0  = no extra leading (glyphs may touch between lines)
-#   1.2  = 120% — a solid default for body text
-#   1.25 = matches the CSS default for most browsers
-#   1.5  = generous (double-spaced feel)
-LINE_HEIGHT = 1.0
-
 # Extra padding on Win and hhea metrics, as a fraction of UPM.
 # Prevents clipping of glyphs that sit right at the bounding-box edge.
 #   0.0  = trust the bounding boxes exactly
@@ -93,11 +86,15 @@ cap_h, cap_c = measure_chars("HIOXE",    axis="top")
 asc_h, asc_c = measure_chars("bdfhkl",   axis="top")
 xht_h, xht_c = measure_chars("xzouv",    axis="top")
 dsc_h, dsc_c = measure_chars("gpqyj",    axis="bottom")
+acc_h, acc_c = measure_chars("\u00c0\u00c1\u00c2\u00c3\u00c4\u00c5\u00c8\u00c9\u00ca\u00cb", axis="top")
+acd_h, acd_c = measure_chars("\u00c7\u015e\u0162",  axis="bottom")
 
 for label, val, ch in [("Cap height", cap_h, cap_c),
                         ("Ascender",   asc_h, asc_c),
+                        ("Accent top", acc_h, acc_c),
                         ("x-height",   xht_h, xht_c),
-                        ("Descender",  dsc_h, dsc_c)]:
+                        ("Descender",  dsc_h, dsc_c),
+                        ("Accent bot", acd_h, acd_c)]:
     if val is not None:
         print(f"  {label:12s}  {int(val):>6}  ('{ch}')")
     else:
@@ -135,57 +132,31 @@ if design_top is None or design_bot is None:
 #           lineGap absorbs all extra leading.  This keeps the text vertically
 #           centred on the line, which matters for UI / web layout.
 
-desired_lh     = int(round(upm * LINE_HEIGHT))
-ink_ascender   = int(round(design_top))
-ink_descender  = int(round(design_bot))           # negative
-ink_extent     = ink_ascender - ink_descender      # total ink span (positive)
+typo_ascender  = int(round(design_top))
+typo_descender = int(round(design_bot))          # negative
+typo_extent    = typo_ascender - typo_descender   # total ink span (positive)
+typo_linegap   = 0
 
-if ink_extent <= desired_lh:
-    # Ink fits within desired line height — use ink boundaries, gap absorbs rest
-    typo_ascender  = ink_ascender
-    typo_descender = ink_descender
-    typo_linegap   = desired_lh - ink_extent
-else:
-    # Ink exceeds desired line height — cap to UPM, split proportionally
-    ratio = ink_ascender / ink_extent
-    typo_ascender  = int(round(desired_lh * ratio))
-    typo_descender = typo_ascender - desired_lh    # negative
-    typo_linegap   = 0
-
-typo_extent    = typo_ascender - typo_descender
-
-# ── OS/2 Win metrics ─────────────────────────────────────────────────────────
-# Clipping boundaries on Windows.  Based on the design ascender/descender
-# (not the full font bbox, which can be inflated by stacked diacritics like
-# Aringacute).  A small margin prevents clipping of hinting artefacts.
+# ── Win / hhea metrics ───────────────────────────────────────────────────────
+# Clipping boundaries.  Based on the design ascender/descender with a small
+# margin.  Accented capitals and stacked diacritics may clip, but line
+# height stays tight on all platforms.
 
 margin       = int(math.ceil(upm * CLIP_MARGIN))
+
 win_ascent   = int(math.ceil(design_top))  + margin
 win_descent  = int(math.ceil(abs(design_bot))) + margin
 
-# ── hhea metrics ──────────────────────────────────────────────────────────────
-# macOS/iOS always uses hhea for *both* line spacing and clipping (it ignores
-# USE_TYPO_METRICS).  To keep line height consistent across platforms, we fold
-# the Typo lineGap into hhea ascent/descent so hhea_lineGap can be 0.
-# Based on design ascender/descender, not the full font bbox.
-
-half_gap  = typo_linegap // 2
-extra     = typo_linegap - 2 * half_gap   # +1 rounding remainder → ascent side
-
-spacing_asc = typo_ascender  + half_gap + extra
-spacing_dsc = typo_descender - half_gap          # more negative
-
-hhea_ascent  = max(spacing_asc, int(math.ceil(design_top))  + margin)
-hhea_descent = min(spacing_dsc, int(math.floor(design_bot)) - margin)  # negative
+hhea_ascent  = win_ascent
+hhea_descent = -win_descent   # negative
 hhea_linegap = 0
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # STEP 4 — Apply to font
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-# FontForge's own ascent / descent (used for UPM split in the head table)
-f.ascent  = typo_ascender
-f.descent = abs(typo_descender)
+# Keep f.ascent / f.descent at their current values — they define UPM
+# (f.ascent + f.descent = f.em) and must not be changed.
 
 # OS/2 table
 f.os2_typoascent    = typo_ascender

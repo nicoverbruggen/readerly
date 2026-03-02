@@ -4,9 +4,9 @@ Readerly Build Script
 ─────────────────────
 Orchestrates the full font build pipeline:
 
-  1. Copies ./src/*.sfd → ./src_processed/
-  2. Applies vertical scale (scale.py)
-  3. Applies vertical metrics (metrics.py)
+  1. Instances variable fonts into static TTFs (fontTools.instancer)
+  2. Applies vertical scale (scale.py) via FontForge
+  3. Applies vertical metrics, line height, rename (metrics.py, lineheight.py, rename.py)
   4. Exports to TTF with old-style kern table → ./out/
 
 Uses the Flatpak version of FontForge.
@@ -30,6 +30,21 @@ OUT_DIR     = os.path.join(ROOT_DIR, "out")
 SCRIPTS_DIR = os.path.join(ROOT_DIR, "scripts")
 
 FLATPAK_APP = "org.fontforge.FontForge"
+
+REGULAR_VF = os.path.join(SRC_DIR, "Newsreader-VariableFont_opsz,wght.ttf")
+ITALIC_VF  = os.path.join(SRC_DIR, "Newsreader-Italic-VariableFont_opsz,wght.ttf")
+
+VARIANTS = [
+    # (output_name, source_vf, wght, opsz)
+    ("Readerly-Regular",    REGULAR_VF, 430, 9),
+    ("Readerly-Bold",       REGULAR_VF, 550, 9),
+    ("Readerly-Italic",     ITALIC_VF,  430, 9),
+    ("Readerly-BoldItalic", ITALIC_VF,  550, 9),
+]
+
+# Glyphs to clear — stacked diacritics that inflate head.yMax far beyond
+# the design ascender.  Aringacute (Ǻ/ǻ) is the sole outlier at 2268 units.
+CLEAR_GLYPHS = ["Aringacute", "aringacute"]
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # HELPERS
@@ -63,24 +78,25 @@ def run_fontforge_script(script_text):
         sys.exit(1)
 
 
-def build_per_font_script(sfd_path, steps):
+def build_per_font_script(open_path, save_path, steps):
     """
-    Build a FontForge Python script that opens an .sfd file, runs the given
-    step scripts (which expect `f` to be the active font), saves, and closes.
+    Build a FontForge Python script that opens a font file, runs the given
+    step scripts (which expect `f` to be the active font), saves as .sfd,
+    and closes.
 
     Each step is a (label, script_body) tuple. The script_body should use `f`
     as the font variable.
     """
     parts = [
         f'import fontforge',
-        f'f = fontforge.open({sfd_path!r})',
+        f'f = fontforge.open({open_path!r})',
         f'print("\\nOpened: " + f.fontname + "\\n")',
     ]
     for label, body in steps:
         parts.append(f'print("── {label} ──\\n")')
         parts.append(body)
-    parts.append(f'f.save({sfd_path!r})')
-    parts.append(f'print("\\nSaved: {sfd_path}\\n")')
+    parts.append(f'f.save({save_path!r})')
+    parts.append(f'print("\\nSaved: {save_path}\\n")')
     parts.append('f.close()')
     return "\n".join(parts)
 
@@ -123,43 +139,77 @@ def main():
     print("  Readerly Build")
     print("=" * 60)
 
-    # Step 1: Copy src → src_processed
-    print("\n── Step 1: Copy sources to ./src_processed ──\n")
+    # Step 1: Instance variable fonts into static TTFs
+    print("\n── Step 1: Instance variable fonts ──\n")
     if os.path.exists(MUTATED_DIR):
         shutil.rmtree(MUTATED_DIR)
-    shutil.copytree(SRC_DIR, MUTATED_DIR)
-    sfd_files = sorted(f for f in os.listdir(MUTATED_DIR) if f.endswith(".sfd"))
-    for f in sfd_files:
-        print(f"  Copied: {f}")
-    print(f"  {len(sfd_files)} font(s) ready.")
+    os.makedirs(MUTATED_DIR)
 
-    # Step 2: Apply vertical scale to lowercase glyphs
+    for name, vf_path, wght, opsz in VARIANTS:
+        ttf_out = os.path.join(MUTATED_DIR, f"{name}.ttf")
+        print(f"  Instancing {name} (wght={wght}, opsz={opsz})")
+
+        cmd = [
+            sys.executable, "-m", "fontTools", "varLib.instancer",
+            vf_path,
+            "-o", ttf_out,
+            f"wght={wght}",
+            f"opsz={opsz}",
+        ]
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        if result.stdout:
+            print(result.stdout, end="")
+        if result.returncode != 0:
+            print(f"\nERROR: instancer failed for {name}", file=sys.stderr)
+            if result.stderr:
+                print(result.stderr, file=sys.stderr)
+            sys.exit(1)
+
+    variant_names = [name for name, _, _, _ in VARIANTS]
+    print(f"  {len(VARIANTS)} font(s) instanced.")
+
+    # Step 2: Apply vertical scale (opens TTF, saves as SFD)
     print("\n── Step 2: Scale lowercase ──\n")
 
     scale_code = load_script_as_function(os.path.join(SCRIPTS_DIR, "scale.py"))
 
-    for sfd_name in sfd_files:
-        sfd_path = os.path.join(MUTATED_DIR, sfd_name)
-        print(f"Scaling: {sfd_name}")
+    clear_code = "\n".join(
+        f'if {g!r} in f:\n'
+        f'    f[{g!r}].clear()\n'
+        f'    print("  Cleared: {g}")'
+        for g in CLEAR_GLYPHS
+    )
 
-        script = build_per_font_script(sfd_path, [
+    for name in variant_names:
+        ttf_path = os.path.join(MUTATED_DIR, f"{name}.ttf")
+        sfd_path = os.path.join(MUTATED_DIR, f"{name}.sfd")
+        print(f"Scaling: {name}")
+
+        script = build_per_font_script(ttf_path, sfd_path, [
+            ("Clearing problematic glyphs", clear_code),
             ("Scaling Y", scale_code),
         ])
         run_fontforge_script(script)
 
-    # Step 3: Apply metrics and rename
+    # Step 3: Apply metrics and rename (opens SFD, saves as SFD)
     print("\n── Step 3: Apply metrics and rename ──\n")
 
-    metrics_code = load_script_as_function(os.path.join(SCRIPTS_DIR, "metrics.py"))
-    rename_code  = load_script_as_function(os.path.join(SCRIPTS_DIR, "rename.py"))
+    metrics_code    = load_script_as_function(os.path.join(SCRIPTS_DIR, "metrics.py"))
+    lineheight_code = load_script_as_function(os.path.join(SCRIPTS_DIR, "lineheight.py"))
+    rename_code     = load_script_as_function(os.path.join(SCRIPTS_DIR, "rename.py"))
 
-    for sfd_name in sfd_files:
-        sfd_path = os.path.join(MUTATED_DIR, sfd_name)
-        print(f"Processing: {sfd_name}")
+    for name in variant_names:
+        sfd_path = os.path.join(MUTATED_DIR, f"{name}.sfd")
+        print(f"Processing: {name}")
         print("-" * 40)
 
-        script = build_per_font_script(sfd_path, [
+        # Set fontname so rename.py can detect the correct style suffix
+        set_fontname = f'f.fontname = {name!r}'
+
+        script = build_per_font_script(sfd_path, sfd_path, [
             ("Setting vertical metrics", metrics_code),
+            ("Adjusting line height", lineheight_code),
+            ("Setting fontname for rename", set_fontname),
             ("Updating font names", rename_code),
         ])
         run_fontforge_script(script)
@@ -168,10 +218,9 @@ def main():
     print("\n── Step 4: Export to TTF ──\n")
     os.makedirs(OUT_DIR, exist_ok=True)
 
-    for sfd_name in sfd_files:
-        sfd_path = os.path.join(MUTATED_DIR, sfd_name)
-        ttf_name = sfd_name.replace(".sfd", ".ttf")
-        ttf_path = os.path.join(OUT_DIR, ttf_name)
+    for name in variant_names:
+        sfd_path = os.path.join(MUTATED_DIR, f"{name}.sfd")
+        ttf_path = os.path.join(OUT_DIR, f"{name}.ttf")
 
         script = build_export_script(sfd_path, ttf_path)
         run_fontforge_script(script)
