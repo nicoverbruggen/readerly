@@ -7,9 +7,9 @@ Orchestrates the full font build pipeline:
   1. Instances variable fonts into static TTFs (fontTools.instancer)
   2. Applies vertical scale (scale.py) via FontForge
   3. Applies vertical metrics, line height, rename (metrics.py, lineheight.py, rename.py)
-  4. Exports to TTF with old-style kern table → ./out/
+  4. Exports to SFD and TTF → ./out/sfd/ and ./out/ttf/
 
-Uses the Flatpak version of FontForge.
+Uses FontForge (detected automatically).
 Run with: python3 build.py
 """
 
@@ -25,8 +25,9 @@ import textwrap
 
 ROOT_DIR    = os.path.dirname(os.path.abspath(__file__))
 SRC_DIR     = os.path.join(ROOT_DIR, "src")
-MUTATED_DIR = os.path.join(ROOT_DIR, "src_processed")
 OUT_DIR     = os.path.join(ROOT_DIR, "out")
+OUT_SFD_DIR = os.path.join(OUT_DIR, "sfd")
+OUT_TTF_DIR = os.path.join(OUT_DIR, "ttf")
 SCRIPTS_DIR = os.path.join(ROOT_DIR, "scripts")
 
 FLATPAK_APP = "org.fontforge.FontForge"
@@ -141,14 +142,25 @@ def main():
     print("  Readerly Build")
     print("=" * 60)
 
+    tmp_dir = os.path.join(ROOT_DIR, "tmp")
+    if os.path.exists(tmp_dir):
+        shutil.rmtree(tmp_dir)
+    os.makedirs(tmp_dir)
+
+    try:
+        _build(tmp_dir)
+    finally:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+
+
+def _build(tmp_dir):
+    variant_names = [name for name, _, _, _ in VARIANTS]
+
     # Step 1: Instance variable fonts into static TTFs
     print("\n── Step 1: Instance variable fonts ──\n")
-    if os.path.exists(MUTATED_DIR):
-        shutil.rmtree(MUTATED_DIR)
-    os.makedirs(MUTATED_DIR)
 
     for name, vf_path, wght, opsz in VARIANTS:
-        ttf_out = os.path.join(MUTATED_DIR, f"{name}.ttf")
+        ttf_out = os.path.join(tmp_dir, f"{name}.ttf")
         print(f"  Instancing {name} (wght={wght}, opsz={opsz})")
 
         cmd = [
@@ -167,7 +179,6 @@ def main():
                 print(result.stderr, file=sys.stderr)
             sys.exit(1)
 
-    variant_names = [name for name, _, _, _ in VARIANTS]
     print(f"  {len(VARIANTS)} font(s) instanced.")
 
     # Step 2: Apply vertical scale (opens TTF, saves as SFD)
@@ -177,8 +188,8 @@ def main():
     condense_code = load_script_as_function(os.path.join(SCRIPTS_DIR, "condense.py"))
 
     for name in variant_names:
-        ttf_path = os.path.join(MUTATED_DIR, f"{name}.ttf")
-        sfd_path = os.path.join(MUTATED_DIR, f"{name}.sfd")
+        ttf_path = os.path.join(tmp_dir, f"{name}.ttf")
+        sfd_path = os.path.join(tmp_dir, f"{name}.sfd")
         print(f"Scaling: {name}")
 
         script = build_per_font_script(ttf_path, sfd_path, [
@@ -197,7 +208,7 @@ def main():
     license_code    = load_script_as_function(os.path.join(SCRIPTS_DIR, "license.py"))
 
     for name in variant_names:
-        sfd_path = os.path.join(MUTATED_DIR, f"{name}.sfd")
+        sfd_path = os.path.join(tmp_dir, f"{name}.sfd")
         print(f"Processing: {name}")
         print("-" * 40)
 
@@ -216,20 +227,27 @@ def main():
         ])
         run_fontforge_script(script)
 
-    # Step 4: Export to TTF
-    print("\n── Step 4: Export to TTF ──\n")
-    os.makedirs(OUT_DIR, exist_ok=True)
+    # Step 4: Export to out/sfd and out/ttf
+    print("\n── Step 4: Export ──\n")
+    os.makedirs(OUT_SFD_DIR, exist_ok=True)
+    os.makedirs(OUT_TTF_DIR, exist_ok=True)
 
     for name in variant_names:
-        sfd_path = os.path.join(MUTATED_DIR, f"{name}.sfd")
-        ttf_path = os.path.join(OUT_DIR, f"{name}.ttf")
+        sfd_path = os.path.join(tmp_dir, f"{name}.sfd")
+        ttf_path = os.path.join(OUT_TTF_DIR, f"{name}.ttf")
 
+        # Copy final SFD to out/sfd/
+        shutil.copy2(sfd_path, os.path.join(OUT_SFD_DIR, f"{name}.sfd"))
+        print(f"  -> {OUT_SFD_DIR}/{name}.sfd")
+
+        # Export TTF
         script = build_export_script(sfd_path, ttf_path)
         run_fontforge_script(script)
 
     print("\n" + "=" * 60)
     print("  Build complete!")
-    print(f"  TTF fonts are in: {OUT_DIR}/")
+    print(f"  SFD fonts are in: {OUT_SFD_DIR}/")
+    print(f"  TTF fonts are in: {OUT_TTF_DIR}/")
     print("=" * 60)
 
 
