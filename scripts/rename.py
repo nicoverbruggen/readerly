@@ -1,10 +1,11 @@
 """
 FontForge: Update font name metadata
 ─────────────────────────────────────
-Replaces Newsreader references with Readerly in all name table entries
-and font-level properties.
+Replaces Newsreader references with the target family name in all name table
+entries and font-level properties.
 
-Run inside FontForge (or via build.py which sets `f` before running this).
+FAMILY is injected by build.py before this script runs (defaults to "Readerly").
+Run inside FontForge (or via build.py which sets `f` and `FAMILY` before running this).
 """
 
 import fontforge
@@ -15,7 +16,9 @@ f = fontforge.activeFont()
 # CONFIGURATION
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-FAMILY = "Readerly"
+# FAMILY is injected by build.py; default if run standalone
+if "FAMILY" not in dir():
+    FAMILY = "Readerly"
 
 # Map style suffixes to display names, PS weight strings, and OS/2 weight classes
 STYLE_MAP = {

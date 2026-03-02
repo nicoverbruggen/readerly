@@ -36,6 +36,12 @@ After running `build.py`, you should get:
 python3 build.py
 ```
 
+To customize the font family name or disable old-style kerning:
+
+```
+python3 build.py --customize
+```
+
 The build script (`build.py`) uses `fontTools` and FontForge to transform the Newsreader variable fonts into Readerly. Each step is described below.
 
 #### Step 1: Instancing

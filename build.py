@@ -39,12 +39,14 @@ with open(os.path.join(ROOT_DIR, "VERSION")) as _vf:
 with open(os.path.join(ROOT_DIR, "COPYRIGHT")) as _cf:
     COPYRIGHT_TEXT = _cf.read().strip()
 
-VARIANTS = [
-    # (output_name, source_vf, wght, opsz)
-    ("Readerly-Regular",    REGULAR_VF, 450, 9),
-    ("Readerly-Bold",       REGULAR_VF, 550, 9),
-    ("Readerly-Italic",     ITALIC_VF,  450, 9),
-    ("Readerly-BoldItalic", ITALIC_VF,  550, 9),
+DEFAULT_FAMILY = "Readerly"
+
+VARIANT_STYLES = [
+    # (style_suffix, source_vf, wght, opsz)
+    ("Regular",    REGULAR_VF, 450, 9),
+    ("Bold",       REGULAR_VF, 550, 9),
+    ("Italic",     ITALIC_VF,  450, 9),
+    ("BoldItalic", ITALIC_VF,  550, 9),
 ]
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -152,16 +154,19 @@ def load_script_as_function(script_path):
     return code
 
 
-def build_export_script(sfd_path, ttf_path):
-    """Build a FontForge script that opens an .sfd and exports to TTF with old-style kern."""
+def build_export_script(sfd_path, ttf_path, old_kern=True):
+    """Build a FontForge script that opens an .sfd and exports to TTF."""
+    if old_kern:
+        flags_line = 'flags = ("opentype", "old-kern", "no-FFTM-table", "winkern")'
+    else:
+        flags_line = 'flags = ("opentype", "no-FFTM-table")'
     return textwrap.dedent(f"""\
         import fontforge
 
         f = fontforge.open({sfd_path!r})
         print("Exporting: " + f.fontname)
 
-        # Generate TTF with old-style kern table and Windows-compatible kern pairs
-        flags = ("opentype", "old-kern", "no-FFTM-table", "winkern")
+        {flags_line}
         f.generate({ttf_path!r}, flags=flags)
 
         print("  -> " + {ttf_path!r})
@@ -181,24 +186,40 @@ def main():
     ff_cmd = find_fontforge()
     print(f"  FontForge: {' '.join(ff_cmd)}")
 
+    family   = DEFAULT_FAMILY
+    old_kern = True
+
+    if "--customize" in sys.argv:
+        print()
+        family = input(f"  Font family name [{DEFAULT_FAMILY}]: ").strip() or DEFAULT_FAMILY
+        old_kern_input = input("  Export with old-style kerning? [Y/n]: ").strip().lower()
+        old_kern = old_kern_input not in ("n", "no")
+
+    print()
+    print(f"  Family:    {family}")
+    print(f"  Old kern:  {'yes' if old_kern else 'no'}")
+    print()
+
     tmp_dir = os.path.join(ROOT_DIR, "tmp")
     if os.path.exists(tmp_dir):
         shutil.rmtree(tmp_dir)
     os.makedirs(tmp_dir)
 
     try:
-        _build(tmp_dir)
+        _build(tmp_dir, family=family, old_kern=old_kern)
     finally:
         shutil.rmtree(tmp_dir, ignore_errors=True)
 
 
-def _build(tmp_dir):
-    variant_names = [name for name, _, _, _ in VARIANTS]
+def _build(tmp_dir, family=DEFAULT_FAMILY, old_kern=True):
+    variants = [(f"{family}-{style}", vf, wght, opsz)
+                for style, vf, wght, opsz in VARIANT_STYLES]
+    variant_names = [name for name, _, _, _ in variants]
 
     # Step 1: Instance variable fonts into static TTFs
     print("\n── Step 1: Instance variable fonts ──\n")
 
-    for name, vf_path, wght, opsz in VARIANTS:
+    for name, vf_path, wght, opsz in variants:
         ttf_out = os.path.join(tmp_dir, f"{name}.ttf")
         print(f"  Instancing {name} (wght={wght}, opsz={opsz})")
 
@@ -218,7 +239,7 @@ def _build(tmp_dir):
                 print(result.stderr, file=sys.stderr)
             sys.exit(1)
 
-    print(f"  {len(VARIANTS)} font(s) instanced.")
+    print(f"  {len(variants)} font(s) instanced.")
 
     # Step 2: Apply vertical scale (opens TTF, saves as SFD)
     print("\n── Step 2: Scale lowercase ──\n")
@@ -255,6 +276,7 @@ def _build(tmp_dir):
 
         # Set fontname so rename.py can detect the correct style suffix
         set_fontname = f'f.fontname = {name!r}'
+        set_family   = f'FAMILY = {family!r}'
         set_version  = f'VERSION = {FONT_VERSION!r}'
         set_license  = f'COPYRIGHT_TEXT = {COPYRIGHT_TEXT!r}'
 
@@ -262,7 +284,7 @@ def _build(tmp_dir):
             ("Setting vertical metrics", metrics_code),
             ("Adjusting line height", lineheight_code),
             ("Setting fontname for rename", set_fontname),
-            ("Updating font names", rename_code),
+            ("Updating font names", set_family + "\n" + rename_code),
             ("Setting version", set_version + "\n" + version_code),
             ("Setting license", set_license + "\n" + license_code),
         ])
@@ -282,7 +304,7 @@ def _build(tmp_dir):
         print(f"  -> {OUT_SFD_DIR}/{name}.sfd")
 
         # Export TTF
-        script = build_export_script(sfd_path, ttf_path)
+        script = build_export_script(sfd_path, ttf_path, old_kern=old_kern)
         run_fontforge_script(script)
 
     print("\n" + "=" * 60)
