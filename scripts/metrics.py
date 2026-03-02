@@ -155,18 +155,19 @@ else:
 typo_extent    = typo_ascender - typo_descender
 
 # ── OS/2 Win metrics ─────────────────────────────────────────────────────────
-# Clipping boundaries on Windows.  Must cover every glyph or Windows clips them.
-# usWinDescent is a *positive* distance below the baseline (unlike Typo/hhea).
+# Clipping boundaries on Windows.  Based on the design ascender/descender
+# (not the full font bbox, which can be inflated by stacked diacritics like
+# Aringacute).  A small margin prevents clipping of hinting artefacts.
 
 margin       = int(math.ceil(upm * CLIP_MARGIN))
-win_ascent   = int(math.ceil(max(font_ymax, design_top)))  + margin
-win_descent  = int(math.ceil(max(abs(font_ymin), abs(design_bot)))) + margin
+win_ascent   = int(math.ceil(design_top))  + margin
+win_descent  = int(math.ceil(abs(design_bot))) + margin
 
 # ── hhea metrics ──────────────────────────────────────────────────────────────
 # macOS/iOS always uses hhea for *both* line spacing and clipping (it ignores
 # USE_TYPO_METRICS).  To keep line height consistent across platforms, we fold
 # the Typo lineGap into hhea ascent/descent so hhea_lineGap can be 0.
-# Then we take the max with the font bbox to also prevent Mac clipping.
+# Based on design ascender/descender, not the full font bbox.
 
 half_gap  = typo_linegap // 2
 extra     = typo_linegap - 2 * half_gap   # +1 rounding remainder → ascent side
@@ -174,8 +175,8 @@ extra     = typo_linegap - 2 * half_gap   # +1 rounding remainder → ascent sid
 spacing_asc = typo_ascender  + half_gap + extra
 spacing_dsc = typo_descender - half_gap          # more negative
 
-hhea_ascent  = max(spacing_asc, int(math.ceil(font_ymax))  + margin)
-hhea_descent = min(spacing_dsc, int(math.floor(font_ymin)) - margin)  # negative
+hhea_ascent  = max(spacing_asc, int(math.ceil(design_top))  + margin)
+hhea_descent = min(spacing_dsc, int(math.floor(design_bot)) - margin)  # negative
 hhea_linegap = 0
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

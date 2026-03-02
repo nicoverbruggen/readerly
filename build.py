@@ -4,7 +4,7 @@ Readerly Build Script
 ─────────────────────
 Orchestrates the full font build pipeline:
 
-  1. Copies ./src/*.sfd → ./mutated/
+  1. Copies ./src/*.sfd → ./src_processed/
   2. Applies vertical scale (scale.py)
   3. Applies vertical metrics (metrics.py)
   4. Exports to TTF with old-style kern table → ./out/
@@ -25,7 +25,7 @@ import textwrap
 
 ROOT_DIR    = os.path.dirname(os.path.abspath(__file__))
 SRC_DIR     = os.path.join(ROOT_DIR, "src")
-MUTATED_DIR = os.path.join(ROOT_DIR, "mutated")
+MUTATED_DIR = os.path.join(ROOT_DIR, "src_processed")
 OUT_DIR     = os.path.join(ROOT_DIR, "out")
 SCRIPTS_DIR = os.path.join(ROOT_DIR, "scripts")
 
@@ -123,8 +123,8 @@ def main():
     print("  Readerly Build")
     print("=" * 60)
 
-    # Step 1: Copy src → mutated
-    print("\n── Step 1: Copy sources to ./mutated ──\n")
+    # Step 1: Copy src → src_processed
+    print("\n── Step 1: Copy sources to ./src_processed ──\n")
     if os.path.exists(MUTATED_DIR):
         shutil.rmtree(MUTATED_DIR)
     shutil.copytree(SRC_DIR, MUTATED_DIR)
@@ -147,10 +147,11 @@ def main():
         ])
         run_fontforge_script(script)
 
-    # Step 3: Apply metrics.py to each font
-    print("\n── Step 3: Apply vertical metrics ──\n")
+    # Step 3: Apply metrics and rename
+    print("\n── Step 3: Apply metrics and rename ──\n")
 
     metrics_code = load_script_as_function(os.path.join(SCRIPTS_DIR, "metrics.py"))
+    rename_code  = load_script_as_function(os.path.join(SCRIPTS_DIR, "rename.py"))
 
     for sfd_name in sfd_files:
         sfd_path = os.path.join(MUTATED_DIR, sfd_name)
@@ -159,6 +160,7 @@ def main():
 
         script = build_per_font_script(sfd_path, [
             ("Setting vertical metrics", metrics_code),
+            ("Updating font names", rename_code),
         ])
         run_fontforge_script(script)
 

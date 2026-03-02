@@ -10,21 +10,23 @@ To accomplish this, I wanted to start from the 9pt font, which I exported. Then,
 
 ## Project structure
 
-- `./src`: folder containing all Readerly source files
-- `./scripts`: some experimental scripts
+- `./src`: source .sfd font files (Newsreader 9pt, renamed to Readerly)
+- `./scripts`: FontForge Python scripts applied during the build
+  - `scale.py`: scales lowercase glyphs vertically to increase x-height
+  - `metrics.py`: sets vertical metrics (OS/2 Typo, Win, hhea)
+  - `rename.py`: updates font name metadata from Newsreader to Readerly
+- `./src_processed`: intermediate .sfd files after processing (generated)
+- `./out`: final TTF fonts (generated)
 
-## Goal
+## Building
 
-- Increase the vertical sizing of the font by 5-10% (metrics.py)
-- Update the xheight to be closer to what Bookerly looks like (xheight.py)
-- This should apply to all fonts
-- A separate "export" script should be added that generates TTF fonts (with old style kerning)
+```
+python3 build.py
+```
 
-In the end, I want to be able to run a script, `build.py`, which should:
+This uses the Flatpak version of FontForge to:
 
-- Use the flatpak version of FontForge
-- Copy the ./src files to ./mutated
-- Apply the edits mentioned above
-- Export the fonts to TTF in ./out
-
-I will then manually review the fonts.
+1. Copy `./src` to `./src_processed`
+2. Scale lowercase glyphs (configurable in `scripts/scale.py`)
+3. Set vertical metrics and update font names
+4. Export to TTF with old-style kerning in `./out`
