@@ -135,11 +135,24 @@ if design_top is None or design_bot is None:
 #           lineGap absorbs all extra leading.  This keeps the text vertically
 #           centred on the line, which matters for UI / web layout.
 
-typo_ascender  = int(round(design_top))
-typo_descender = int(round(design_bot))          # negative
-typo_extent    = typo_ascender - typo_descender   # total ink span (positive)
 desired_lh     = int(round(upm * LINE_HEIGHT))
-typo_linegap   = max(0, desired_lh - typo_extent)
+ink_ascender   = int(round(design_top))
+ink_descender  = int(round(design_bot))           # negative
+ink_extent     = ink_ascender - ink_descender      # total ink span (positive)
+
+if ink_extent <= desired_lh:
+    # Ink fits within desired line height — use ink boundaries, gap absorbs rest
+    typo_ascender  = ink_ascender
+    typo_descender = ink_descender
+    typo_linegap   = desired_lh - ink_extent
+else:
+    # Ink exceeds desired line height — cap to UPM, split proportionally
+    ratio = ink_ascender / ink_extent
+    typo_ascender  = int(round(desired_lh * ratio))
+    typo_descender = typo_ascender - desired_lh    # negative
+    typo_linegap   = 0
+
+typo_extent    = typo_ascender - typo_descender
 
 # ── OS/2 Win metrics ─────────────────────────────────────────────────────────
 # Clipping boundaries on Windows.  Must cover every glyph or Windows clips them.

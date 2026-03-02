@@ -133,8 +133,8 @@ def main():
         print(f"  Copied: {f}")
     print(f"  {len(sfd_files)} font(s) ready.")
 
-    # Step 2: Apply vertical scale to all glyphs
-    print("\n── Step 2: Vertical scale ──\n")
+    # Step 2: Apply vertical scale to lowercase glyphs
+    print("\n── Step 2: Scale lowercase ──\n")
 
     scale_code = load_script_as_function(os.path.join(SCRIPTS_DIR, "scale.py"))
 

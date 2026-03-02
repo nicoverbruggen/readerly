@@ -1,7 +1,7 @@
 """
-FontForge: Scale all glyphs vertically
-───────────────────────────────────────
-Applies a vertical scale to all glyphs from glyph origin,
+FontForge: Scale lowercase glyphs vertically
+─────────────────────────────────────────────
+Applies a vertical scale to lowercase glyphs only, from glyph origin,
 matching the Transform dialog with all options checked:
 
   - Transform All Layers
@@ -16,6 +16,7 @@ Run inside FontForge (or via build.py which sets `f` before running this).
 
 import fontforge
 import psMat
+import unicodedata
 
 f = fontforge.activeFont()
 
@@ -24,7 +25,7 @@ f = fontforge.activeFont()
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 SCALE_X = 1.0
-SCALE_Y = 1.0
+SCALE_Y = 1.10
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # APPLY
@@ -32,17 +33,21 @@ SCALE_Y = 1.0
 
 mat = psMat.scale(SCALE_X, SCALE_Y)
 
-# Select all glyphs
-f.selection.all()
+# Select only lowercase glyphs
+f.selection.none()
+count = 0
+for g in f.glyphs():
+    if g.unicode < 0:
+        continue
+    try:
+        cat = unicodedata.category(chr(g.unicode))
+    except (ValueError, OverflowError):
+        continue
+    if cat == "Ll" or g.unicode in (0x00AA, 0x00BA):
+        f.selection.select(("more",), g.glyphname)
+        count += 1
 
-# Transform with all options enabled.
-# FontForge flag names:
-#   partialTrans      — transform selected points only (we don't want this)
-#   round             — Round To Int
-# The font-level transform handles layers, widths, kerning, and positioning
-# when called on the full selection.
 f.transform(mat, ("round",))
 
-count = sum(1 for g in f.glyphs() if g.isWorthOutputting())
-print(f"  Scaled {count} glyphs by X={SCALE_X:.0%}, Y={SCALE_Y:.0%}")
+print(f"  Scaled {count} lowercase glyphs by X={SCALE_X:.0%}, Y={SCALE_Y:.0%}")
 print("Done.")
