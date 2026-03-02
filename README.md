@@ -65,9 +65,9 @@ The Newsreader variable font supports two axes: optical size (`opsz`) and weight
 
 Variant configuration (in `build.py`):
 - Regular: wght=450, opsz=9
-- Bold: wght=550, opsz=9
+- Bold: wght=650, opsz=9
 - Italic: wght=450, opsz=9
-- BoldItalic: wght=550, opsz=9
+- BoldItalic: wght=650, opsz=9
 
 #### Step 2: Scaling, condensing, and overlap removal
 
@@ -89,7 +89,7 @@ Several metadata scripts are applied via FontForge:
 
 #### Step 4: Export
 
-The final fonts are exported from FontForge as TTF. Outline fixes remove overlaps and zero-area contours that can cause missing glyphs on macOS; you can disable them via `--customize`. The build supports optional old-style kern tables, but this is off by default because it has no effect on device tests.
+The final fonts are exported from FontForge as TTF. Outline fixes remove overlaps and zero-area contours that can cause missing glyphs on macOS; you can disable them via `--customize`. The build supports optional old-style kern tables, but this is off by default because it has no effect on device tests. As a final post-export step, `build.py` normalizes the OS/2 style flags and `head.macStyle` with fontTools so Bold/Italic variants link correctly on Kobo.
 
 #### TTF cleanup (manual exports)
 
