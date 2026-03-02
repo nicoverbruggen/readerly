@@ -178,6 +178,68 @@ def build_export_script(sfd_path, ttf_path, old_kern=True):
     """)
 
 
+def clean_ttf_degenerate_contours(ttf_path):
+    """Remove degenerate contours (<=2 points) from a TTF in-place."""
+    try:
+        from fontTools.ttLib import TTFont
+        from fontTools.ttLib.tables._g_l_y_f import GlyphCoordinates
+    except Exception:
+        print("  [warn] Skipping cleanup: fontTools not available", file=sys.stderr)
+        return
+
+    font = TTFont(ttf_path)
+    glyf = font["glyf"]  # type: ignore[index]
+
+    removed_total = 0
+    modified = set()
+    for name in font.getGlyphOrder():
+        glyph = glyf[name]  # type: ignore[index]
+        if glyph.isComposite():
+            continue
+        end_pts = getattr(glyph, "endPtsOfContours", None)
+        if not end_pts:
+            continue
+
+        coords = glyph.coordinates
+        flags = glyph.flags
+
+        new_coords = []
+        new_flags = []
+        new_end_pts = []
+
+        start = 0
+        removed = 0
+        for end in end_pts:
+            count = end - start + 1
+            if count <= 2:
+                removed += 1
+            else:
+                new_coords.extend(coords[start:end + 1])
+                new_flags.extend(flags[start:end + 1])
+                new_end_pts.append(len(new_coords) - 1)
+            start = end + 1
+
+        if removed:
+            removed_total += removed
+            modified.add(name)
+            glyph.coordinates = GlyphCoordinates(new_coords)
+            glyph.flags = new_flags
+            glyph.endPtsOfContours = new_end_pts
+            glyph.numberOfContours = len(new_end_pts)
+
+    if removed_total:
+        glyph_set = font.getGlyphSet()
+        for name in modified:
+            glyph = glyf[name]  # type: ignore[index]
+            if hasattr(glyph, "recalcBounds"):
+                glyph.recalcBounds(glyph_set)
+        if hasattr(glyf, "recalcBounds"):
+            glyf.recalcBounds(glyph_set)  # type: ignore[attr-defined]
+        font.save(ttf_path)
+        print(f"  Cleaned {removed_total} degenerate contour(s)")
+    font.close()
+
+
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # MAIN
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -310,6 +372,7 @@ def _build(tmp_dir, family=DEFAULT_FAMILY, old_kern=True):
         # Export TTF
         script = build_export_script(sfd_path, ttf_path, old_kern=old_kern)
         run_fontforge_script(script)
+        clean_ttf_degenerate_contours(ttf_path)
 
     print("\n" + "=" * 60)
     print("  Build complete!")
