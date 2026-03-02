@@ -30,6 +30,19 @@ After running `build.py`, you should get:
 - **[fontTools](https://github.com/fonttools/fonttools)** — install with `pip install fonttools`
 - **[FontForge](https://fontforge.org)** — the build script auto-detects FontForge from PATH, Flatpak, or the macOS app bundle
 
+### Linux preparation
+
+```
+pip install fonttools
+flatpak install flathub org.fontforge.FontForge
+```
+
+### macOS preparation
+```
+brew install fontforge
+python3 -m pip install --user -U fonttools
+```
+
 ## Building
 
 ```
@@ -74,4 +87,4 @@ Several metadata scripts are applied via FontForge:
 
 #### Step 4: Export
 
-The final fonts are exported from FontForge as both SFD (FontForge source) and TTF with old-style kern tables for maximum compatibility with e-reader rendering engines.
+The final fonts are exported from FontForge as both SFD (FontForge source) and TTF. The build supports optional old-style kern tables, but this is off by default because it has no effect on device tests.

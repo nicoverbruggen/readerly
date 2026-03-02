@@ -80,10 +80,14 @@ def find_fontforge():
             return FONTFORGE_CMD
 
     # 3. macOS app bundle
-    mac_path = "/Applications/FontForge.app/Contents/MacOS/FontForge"
-    if os.path.isfile(mac_path):
-        FONTFORGE_CMD = [mac_path]
-        return FONTFORGE_CMD
+    mac_paths = [
+        "/Applications/FontForge.app/Contents/MacOS/FontForge",
+        "/Applications/FontForge.app/Contents/Resources/opt/local/bin/fontforge",
+    ]
+    for mac_path in mac_paths:
+        if os.path.isfile(mac_path):
+            FONTFORGE_CMD = [mac_path]
+            return FONTFORGE_CMD
 
     print(
         "ERROR: FontForge not found.\n"
@@ -187,13 +191,13 @@ def main():
     print(f"  FontForge: {' '.join(ff_cmd)}")
 
     family   = DEFAULT_FAMILY
-    old_kern = True
+    old_kern = False
 
     if "--customize" in sys.argv:
         print()
         family = input(f"  Font family name [{DEFAULT_FAMILY}]: ").strip() or DEFAULT_FAMILY
-        old_kern_input = input("  Export with old-style kerning? [Y/n]: ").strip().lower()
-        old_kern = old_kern_input not in ("n", "no")
+        old_kern_input = input("  Export with old-style kerning? [y/N]: ").strip().lower()
+        old_kern = old_kern_input in ("y", "yes")
 
     print()
     print(f"  Family:    {family}")
@@ -224,11 +228,11 @@ def _build(tmp_dir, family=DEFAULT_FAMILY, old_kern=True):
         print(f"  Instancing {name} (wght={wght}, opsz={opsz})")
 
         cmd = [
-            sys.executable, "-m", "fontTools", "varLib.instancer",
+            sys.executable, "-m", "fontTools.varLib.instancer",
             vf_path,
-            "-o", ttf_out,
             f"wght={wght}",
             f"opsz={opsz}",
+            "-o", ttf_out,
         ]
         result = subprocess.run(cmd, capture_output=True, text=True)
         if result.stdout:
