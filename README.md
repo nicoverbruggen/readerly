@@ -1,12 +1,14 @@
 # Readerly
 
-When I was doing my usual font tweaking for my ebook-fonts repository, I stumbled upon variable fonts exporting. Doing this for Newsreader gave me some interesting results at small optical sizes: the font was now reminding me of Bookerly.
+**Readerly** is modified font based on [Newsreader](https://github.com/productiontype/Newsreader), while attempting to be metrically very similar to [Bookerly](https://en.wikipedia.org/wiki/Bookerly), the default font on Kindle devices, to provide a similar reading experience.
 
-I asked myself the question: how close can we get to the visual appearance of Bookerly while still retaining Newsreader and keeping the font licensed under the OFL?
+When I was doing my usual font tweaking for my [ebook-fonts](https://github.com/nicoverbruggen/ebook-fonts) repository, I stumbled upon variable fonts exporting. Doing this for Newsreader gave me some interesting results at small optical sizes: the font was now reminding me of Bookerly.
 
-The goal is to get a metrically/visually similar font, without actually copying glyphs or anything that would infringe upon the rights of the original creators.
+I asked myself the question: how close can we get to the metrics of Bookerly while still retaining Newsreader and keeping the font licensed under the OFL, and maybe making some mild manual edits?
 
-To accomplish this, I wanted to start from the 9pt font, which I exported. Then, it was a matter of playing around with scripts and manual edits to see if I could get something that was optically close enough.
+The goal was to get a metrically/visually similar font, without actually copying glyphs or anything that would infringe upon the rights of the original creators; after all, Newsreader is a very beautiful font as a starting point.
+
+To get to the final result, I decided to use the variable font and work on it. The original is located in `./src` and is available under the same OFL as the end result.
 
 ## Project structure
 
@@ -17,8 +19,8 @@ To accomplish this, I wanted to start from the 9pt font, which I exported. Then,
   - `lineheight.py`: adjusts OS/2 Typo metrics to control line spacing
   - `rename.py`: updates font name metadata from Newsreader to Readerly
   - `version.py`: sets the font version from `./VERSION`
-- `./src_processed`: intermediate files after instancing/processing (generated)
-- `./out`: final TTF fonts (generated)
+- `./out/sfd`: FontForge source files (generated)
+- `./out/ttf`: final TTF fonts (generated)
 
 ## Building
 
