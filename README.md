@@ -7,3 +7,24 @@ I asked myself the question: how close can we get to the visual appearance of Bo
 The goal is to get a metrically/visually similar font, without actually copying glyphs or anything that would infringe upon the rights of the original creators.
 
 To accomplish this, I wanted to start from the 9pt font, which I exported. Then, it was a matter of playing around with scripts and manual edits to see if I could get something that was optically close enough.
+
+## Project structure
+
+- `./src`: folder containing all Readerly source files
+- `./scripts`: some experimental scripts
+
+## Goal
+
+- Increase the vertical sizing of the font by 5-10% (metrics.py)
+- Update the xheight to be closer to what Bookerly looks like (xheight.py)
+- This should apply to all fonts
+- A separate "export" script should be added that generates TTF fonts (with old style kerning)
+
+In the end, I want to be able to run a script, `build.py`, which should:
+
+- Use the flatpak version of FontForge
+- Copy the ./src files to ./mutated
+- Apply the edits mentioned above
+- Export the fonts to TTF in ./out
+
+I will then manually review the fonts.
