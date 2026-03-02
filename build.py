@@ -30,8 +30,6 @@ OUT_SFD_DIR = os.path.join(OUT_DIR, "sfd")
 OUT_TTF_DIR = os.path.join(OUT_DIR, "ttf")
 SCRIPTS_DIR = os.path.join(ROOT_DIR, "scripts")
 
-FLATPAK_APP = "org.fontforge.FontForge"
-
 REGULAR_VF = os.path.join(SRC_DIR, "Newsreader-VariableFont_opsz,wght.ttf")
 ITALIC_VF  = os.path.join(SRC_DIR, "Newsreader-Italic-VariableFont_opsz,wght.ttf")
 
@@ -53,13 +51,51 @@ VARIANTS = [
 # HELPERS
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+FONTFORGE_CMD = None
+
+def find_fontforge():
+    """Detect FontForge on the system. Returns a command list."""
+    global FONTFORGE_CMD
+    if FONTFORGE_CMD is not None:
+        return FONTFORGE_CMD
+
+    # 1. fontforge on PATH (native install, Homebrew, Windows, etc.)
+    if shutil.which("fontforge"):
+        FONTFORGE_CMD = ["fontforge"]
+        return FONTFORGE_CMD
+
+    # 2. Flatpak (Linux)
+    if shutil.which("flatpak"):
+        result = subprocess.run(
+            ["flatpak", "info", "org.fontforge.FontForge"],
+            capture_output=True,
+        )
+        if result.returncode == 0:
+            FONTFORGE_CMD = [
+                "flatpak", "run",
+                "--command=fontforge", "org.fontforge.FontForge",
+            ]
+            return FONTFORGE_CMD
+
+    # 3. macOS app bundle
+    mac_path = "/Applications/FontForge.app/Contents/MacOS/FontForge"
+    if os.path.isfile(mac_path):
+        FONTFORGE_CMD = [mac_path]
+        return FONTFORGE_CMD
+
+    print(
+        "ERROR: FontForge not found.\n"
+        "Install it via your package manager, Flatpak, or from https://fontforge.org",
+        file=sys.stderr,
+    )
+    sys.exit(1)
+
+
 def run_fontforge_script(script_text):
-    """Run a Python script inside FontForge via flatpak."""
+    """Run a Python script inside FontForge."""
+    cmd = find_fontforge() + ["-lang=py", "-script", "-"]
     result = subprocess.run(
-        [
-            "flatpak", "run", "--command=fontforge", FLATPAK_APP,
-            "-lang=py", "-script", "-",
-        ],
+        cmd,
         input=script_text,
         capture_output=True,
         text=True,
@@ -141,6 +177,9 @@ def main():
     print("=" * 60)
     print("  Readerly Build")
     print("=" * 60)
+
+    ff_cmd = find_fontforge()
+    print(f"  FontForge: {' '.join(ff_cmd)}")
 
     tmp_dir = os.path.join(ROOT_DIR, "tmp")
     if os.path.exists(tmp_dir):

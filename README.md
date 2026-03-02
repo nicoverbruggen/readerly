@@ -24,6 +24,12 @@ After running `build.py`, you should get:
 - `out/sfd`: FontForge source files (generated)
 - `out/ttf`: final TTF fonts (generated)
 
+## Prerequisites
+
+- **Python 3**
+- **[fontTools](https://github.com/fonttools/fonttools)** — install with `pip install fonttools`
+- **[FontForge](https://fontforge.org)** — the build script auto-detects FontForge from PATH, Flatpak, or the macOS app bundle
+
 ## Building
 
 ```
