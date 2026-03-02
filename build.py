@@ -179,7 +179,7 @@ def build_export_script(sfd_path, ttf_path, old_kern=True):
 
 
 def clean_ttf_degenerate_contours(ttf_path):
-    """Remove degenerate contours (<=2 points) from a TTF in-place."""
+    """Remove zero-area contours (<=2 points) from a TTF in-place."""
     try:
         from fontTools.ttLib import TTFont
         from fontTools.ttLib.tables._g_l_y_f import GlyphCoordinates
@@ -236,7 +236,7 @@ def clean_ttf_degenerate_contours(ttf_path):
         if hasattr(glyf, "recalcBounds"):
             glyf.recalcBounds(glyph_set)  # type: ignore[attr-defined]
         font.save(ttf_path)
-        print(f"  Cleaned {removed_total} degenerate contour(s)")
+        print(f"  Cleaned {removed_total} zero-area contour(s)")
     font.close()
 
 
@@ -304,6 +304,7 @@ def _build(tmp_dir, family=DEFAULT_FAMILY, old_kern=True):
             if result.stderr:
                 print(result.stderr, file=sys.stderr)
             sys.exit(1)
+
 
     print(f"  {len(variants)} font(s) instanced.")
 
@@ -373,6 +374,7 @@ def _build(tmp_dir, family=DEFAULT_FAMILY, old_kern=True):
         script = build_export_script(sfd_path, ttf_path, old_kern=old_kern)
         run_fontforge_script(script)
         clean_ttf_degenerate_contours(ttf_path)
+
 
     print("\n" + "=" * 60)
     print("  Build complete!")

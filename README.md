@@ -87,4 +87,12 @@ Several metadata scripts are applied via FontForge:
 
 #### Step 4: Export
 
-The final fonts are exported from FontForge as both SFD (FontForge source) and TTF. The build supports optional old-style kern tables, but this is off by default because it has no effect on device tests.
+The final fonts are exported from FontForge as TTF. A cleanup step removes zero-area contours that can cause missing glyphs on macOS. The build supports optional old-style kern tables, but this is off by default because it has no effect on device tests.
+
+#### TTF cleanup (manual exports)
+
+Some FontForge exports emit 1–2 point contours in the `glyf` table. macOS can treat these as invalid and skip the glyph entirely (for example, `m` or italic `u`). The build pipeline removes these zero-area contours automatically. If you manually export a TTF from an SFD and see missing glyphs, run:
+
+```
+python3 cleanup_ttf.py out/ttf/Readerly-Regular.ttf
+```
