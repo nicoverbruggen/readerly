@@ -254,16 +254,20 @@ def main():
 
     family   = DEFAULT_FAMILY
     old_kern = False
+    outline_fix  = True
 
     if "--customize" in sys.argv:
         print()
         family = input(f"  Font family name [{DEFAULT_FAMILY}]: ").strip() or DEFAULT_FAMILY
         old_kern_input = input("  Export with old-style kerning? [y/N]: ").strip().lower()
         old_kern = old_kern_input in ("y", "yes")
+        outline_input = input("  Apply outline fixes (remove overlaps + zero-area cleanup)? [Y/n]: ").strip().lower()
+        outline_fix = outline_input not in ("n", "no")
 
     print()
     print(f"  Family:    {family}")
     print(f"  Old kern:  {'yes' if old_kern else 'no'}")
+    print(f"  Outline fix: {'yes' if outline_fix else 'no'}")
     print()
 
     tmp_dir = os.path.join(ROOT_DIR, "tmp")
@@ -272,12 +276,12 @@ def main():
     os.makedirs(tmp_dir)
 
     try:
-        _build(tmp_dir, family=family, old_kern=old_kern)
+        _build(tmp_dir, family=family, old_kern=old_kern, outline_fix=outline_fix)
     finally:
         shutil.rmtree(tmp_dir, ignore_errors=True)
 
 
-def _build(tmp_dir, family=DEFAULT_FAMILY, old_kern=True):
+def _build(tmp_dir, family=DEFAULT_FAMILY, old_kern=True, outline_fix=True):
     variants = [(f"{family}-{style}", vf, wght, opsz)
                 for style, vf, wght, opsz in VARIANT_STYLES]
     variant_names = [name for name, _, _, _ in variants]
@@ -320,11 +324,13 @@ def _build(tmp_dir, family=DEFAULT_FAMILY, old_kern=True):
         sfd_path = os.path.join(tmp_dir, f"{name}.sfd")
         print(f"Scaling: {name}")
 
-        script = build_per_font_script(ttf_path, sfd_path, [
+        steps = [
             ("Scaling Y", scale_code),
             ("Condensing X", condense_code),
-            ("Removing overlaps", overlap_code),
-        ])
+        ]
+        if outline_fix:
+            steps.append(("Removing overlaps", overlap_code))
+        script = build_per_font_script(ttf_path, sfd_path, steps)
         run_fontforge_script(script)
 
     # Step 3: Apply metrics and rename (opens SFD, saves as SFD)
@@ -373,7 +379,8 @@ def _build(tmp_dir, family=DEFAULT_FAMILY, old_kern=True):
         # Export TTF
         script = build_export_script(sfd_path, ttf_path, old_kern=old_kern)
         run_fontforge_script(script)
-        clean_ttf_degenerate_contours(ttf_path)
+        if outline_fix:
+            clean_ttf_degenerate_contours(ttf_path)
 
 
     print("\n" + "=" * 60)

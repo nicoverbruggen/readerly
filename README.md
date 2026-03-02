@@ -49,7 +49,7 @@ python3 -m pip install --user -U fonttools
 python3 build.py
 ```
 
-To customize the font family name or disable old-style kerning:
+To customize the font family name, disable old-style kerning, or skip outline fixes:
 
 ```
 python3 build.py --customize
@@ -87,7 +87,7 @@ Several metadata scripts are applied via FontForge:
 
 #### Step 4: Export
 
-The final fonts are exported from FontForge as TTF. A cleanup step removes zero-area contours that can cause missing glyphs on macOS. The build supports optional old-style kern tables, but this is off by default because it has no effect on device tests.
+The final fonts are exported from FontForge as TTF. Outline fixes remove overlaps and zero-area contours that can cause missing glyphs on macOS; you can disable them via `--customize`. The build supports optional old-style kern tables, but this is off by default because it has no effect on device tests.
 
 #### TTF cleanup (manual exports)
 
