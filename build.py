@@ -36,15 +36,11 @@ ITALIC_VF  = os.path.join(SRC_DIR, "Newsreader-Italic-VariableFont_opsz,wght.ttf
 
 VARIANTS = [
     # (output_name, source_vf, wght, opsz)
-    ("Readerly-Regular",    REGULAR_VF, 425, 9),
+    ("Readerly-Regular",    REGULAR_VF, 430, 9),
     ("Readerly-Bold",       REGULAR_VF, 550, 9),
-    ("Readerly-Italic",     ITALIC_VF,  425, 9),
+    ("Readerly-Italic",     ITALIC_VF,  430, 9),
     ("Readerly-BoldItalic", ITALIC_VF,  550, 9),
 ]
-
-# Glyphs to clear — stacked diacritics that inflate head.yMax far beyond
-# the design ascender.  Aringacute (Ǻ/ǻ) is the sole outlier at 2268 units.
-CLEAR_GLYPHS = ["Aringacute", "aringacute"]
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # HELPERS
@@ -174,20 +170,12 @@ def main():
     scale_code    = load_script_as_function(os.path.join(SCRIPTS_DIR, "scale.py"))
     condense_code = load_script_as_function(os.path.join(SCRIPTS_DIR, "condense.py"))
 
-    clear_code = "\n".join(
-        f'if {g!r} in f:\n'
-        f'    f[{g!r}].clear()\n'
-        f'    print("  Cleared: {g}")'
-        for g in CLEAR_GLYPHS
-    )
-
     for name in variant_names:
         ttf_path = os.path.join(MUTATED_DIR, f"{name}.ttf")
         sfd_path = os.path.join(MUTATED_DIR, f"{name}.sfd")
         print(f"Scaling: {name}")
 
         script = build_per_font_script(ttf_path, sfd_path, [
-            ("Clearing problematic glyphs", clear_code),
             ("Scaling Y", scale_code),
             ("Condensing X", condense_code),
         ])
