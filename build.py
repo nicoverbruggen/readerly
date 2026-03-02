@@ -44,9 +44,9 @@ DEFAULT_FAMILY = "Readerly"
 VARIANT_STYLES = [
     # (style_suffix, source_vf, wght, opsz)
     ("Regular",    REGULAR_VF, 450, 9),
-    ("Bold",       REGULAR_VF, 550, 9),
+    ("Bold",       REGULAR_VF, 650, 9),
     ("Italic",     ITALIC_VF,  450, 9),
-    ("BoldItalic", ITALIC_VF,  550, 9),
+    ("BoldItalic", ITALIC_VF,  650, 9),
 ]
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -240,6 +240,40 @@ def clean_ttf_degenerate_contours(ttf_path):
     font.close()
 
 
+def fix_ttf_style_flags(ttf_path, style_suffix):
+    """Normalize OS/2 fsSelection and head.macStyle for style linking."""
+    try:
+        from fontTools.ttLib import TTFont
+    except Exception:
+        print("  [warn] Skipping style flag fix: fontTools not available", file=sys.stderr)
+        return
+
+    font = TTFont(ttf_path)
+    os2 = font["OS/2"]
+    head = font["head"]
+
+    fs_sel = os2.fsSelection
+    fs_sel &= ~((1 << 0) | (1 << 5) | (1 << 6))
+    if style_suffix == "Regular":
+        fs_sel |= (1 << 6)
+    if "Italic" in style_suffix:
+        fs_sel |= (1 << 0)
+    if "Bold" in style_suffix:
+        fs_sel |= (1 << 5)
+    os2.fsSelection = fs_sel
+
+    macstyle = 0
+    if "Bold" in style_suffix:
+        macstyle |= (1 << 0)
+    if "Italic" in style_suffix:
+        macstyle |= (1 << 1)
+    head.macStyle = macstyle
+
+    font.save(ttf_path)
+    font.close()
+    print(f"  Normalized style flags for {style_suffix}")
+
+
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # MAIN
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -371,6 +405,7 @@ def _build(tmp_dir, family=DEFAULT_FAMILY, old_kern=True, outline_fix=True):
     for name in variant_names:
         sfd_path = os.path.join(tmp_dir, f"{name}.sfd")
         ttf_path = os.path.join(OUT_TTF_DIR, f"{name}.ttf")
+        style_suffix = name.split("-")[-1] if "-" in name else "Regular"
 
         # Copy final SFD to out/sfd/
         shutil.copy2(sfd_path, os.path.join(OUT_SFD_DIR, f"{name}.sfd"))
@@ -381,6 +416,7 @@ def _build(tmp_dir, family=DEFAULT_FAMILY, old_kern=True, outline_fix=True):
         run_fontforge_script(script)
         if outline_fix:
             clean_ttf_degenerate_contours(ttf_path)
+        fix_ttf_style_flags(ttf_path, style_suffix)
 
 
     print("\n" + "=" * 60)

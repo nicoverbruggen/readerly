@@ -28,6 +28,7 @@ STYLE_MAP = {
     "BoldItalic": ("Bold Italic", "Bold", 700),
 }
 
+
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # DETECT STYLE
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -45,6 +46,16 @@ f.familyname = FAMILY
 f.fullname = f"{FAMILY} {style_display}"
 f.weight = ps_weight
 f.os2_weight = os2_weight
+
+# Set head.macStyle for style linking if supported by FontForge
+if hasattr(f, "macstyle"):
+    macstyle = f.macstyle
+    macstyle &= ~((1 << 0) | (1 << 1))
+    if "Bold" in style_suffix:
+        macstyle |= (1 << 0)
+    if "Italic" in style_suffix:
+        macstyle |= (1 << 1)
+    f.macstyle = macstyle
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # UPDATE SFNT NAME TABLE
