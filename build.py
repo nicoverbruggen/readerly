@@ -186,6 +186,7 @@ def _build(tmp_dir):
 
     scale_code    = load_script_as_function(os.path.join(SCRIPTS_DIR, "scale.py"))
     condense_code = load_script_as_function(os.path.join(SCRIPTS_DIR, "condense.py"))
+    overlap_code  = load_script_as_function(os.path.join(SCRIPTS_DIR, "overlaps.py"))
 
     for name in variant_names:
         ttf_path = os.path.join(tmp_dir, f"{name}.ttf")
@@ -195,6 +196,7 @@ def _build(tmp_dir):
         script = build_per_font_script(ttf_path, sfd_path, [
             ("Scaling Y", scale_code),
             ("Condensing X", condense_code),
+            ("Removing overlaps", overlap_code),
         ])
         run_fontforge_script(script)
 
