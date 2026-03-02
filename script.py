@@ -24,7 +24,7 @@ f = fontforge.activeFont()
 #   1.2  = 120% — a solid default for body text
 #   1.25 = matches the CSS default for most browsers
 #   1.5  = generous (double-spaced feel)
-LINE_HEIGHT = 1.1
+LINE_HEIGHT = 1.0
 
 # Extra padding on Win and hhea metrics, as a fraction of UPM.
 # Prevents clipping of glyphs that sit right at the bounding-box edge.
