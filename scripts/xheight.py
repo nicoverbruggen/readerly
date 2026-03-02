@@ -197,21 +197,24 @@ mat        = psMat.scale(scale_factor)
 errors     = []
 weight_ok  = 0
 weight_err = 0
+skipped_composites = 0
 
 for g in targets:
     gname = g.glyphname
 
-    # ── 1. Store original metrics ────────────────────────────────────────────
+    # ── 1. Skip composites ────────────────────────────────────────────────────
+    #    Composite glyphs (é = e + accent) reference base glyphs that we're
+    #    already scaling.  The composite automatically picks up the scaled base.
+    #    Decomposing would flatten the references and double-scale the outlines.
+    if g.references:
+        skipped_composites += 1
+        continue
+
+    # ── 2. Store original metrics ────────────────────────────────────────────
     orig_lsb   = g.left_side_bearing
     orig_rsb   = g.right_side_bearing
     orig_width = g.width
-
-    # ── 2. Decompose composites ──────────────────────────────────────────────
-    #    Prevents double-scaling: if 'é' references 'e' and we scale both,
-    #    the 'e' outlines inside 'é' would be scaled twice.
-    #    Decomposing first means every glyph owns its outlines directly.
-    if g.references:
-        g.unlinkRef()
+    orig_bb    = g.boundingBox()
 
     # ── 3. Uniform scale from origin (0, baseline) ──────────────────────────
     g.transform(mat)
@@ -219,14 +222,22 @@ for g in targets:
     # ── 4. Stroke-weight compensation ────────────────────────────────────────
     if weight_delta != 0:
         try:
-            g.changeWeight(weight_delta, "auto", "auto")
+            g.changeWeight(weight_delta)
             g.correctDirection()
             weight_ok += 1
         except Exception as e:
             weight_err += 1
             errors.append((gname, str(e)))
 
-    # ── 5. Fix sidebearings / advance width ──────────────────────────────────
+    # ── 5. Fix baseline shift ────────────────────────────────────────────────
+    #    changeWeight can shift outlines off the baseline.  If the glyph
+    #    originally sat on y=0, nudge it back.
+    new_bb = g.boundingBox()
+    if orig_bb[1] == 0 and new_bb[1] != 0:
+        shift = -new_bb[1]
+        g.transform(psMat.translate(0, shift))
+
+    # ── 6. Fix sidebearings / advance width ──────────────────────────────────
     if BEARING_MODE == "proportional":
         # Scale bearings by the same factor → glyph is proportionally wider.
         g.left_side_bearing  = int(round(orig_lsb * scale_factor))
@@ -236,7 +247,8 @@ for g in targets:
         g.left_side_bearing  = int(round(orig_lsb))
         g.right_side_bearing = int(round(orig_rsb))
 
-print(f"  Scaled {len(targets)} glyphs.")
+scaled_count = len(targets) - skipped_composites
+print(f"  Scaled {scaled_count} glyphs (skipped {skipped_composites} composites).")
 if weight_delta != 0:
     print(f"  Weight compensation: {weight_ok} OK, {weight_err} errors.")
 if errors:
