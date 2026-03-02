@@ -17,12 +17,12 @@ f = fontforge.activeFont()
 
 FAMILY = "Readerly"
 
-# Map style suffixes to weight strings
+# Map style suffixes to display names, PS weight strings, and OS/2 weight classes
 STYLE_MAP = {
-    "Regular": "Regular",
-    "Bold": "Bold",
-    "Italic": "Italic",
-    "BoldItalic": "Bold Italic",
+    "Regular":    ("Regular",     "Book", 400),
+    "Bold":       ("Bold",        "Bold", 700),
+    "Italic":     ("Italic",      "Book", 400),
+    "BoldItalic": ("Bold Italic", "Bold", 700),
 }
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -31,7 +31,7 @@ STYLE_MAP = {
 
 # Determine style from the current fontname (e.g. "Readerly-BoldItalic")
 style_suffix = f.fontname.split("-")[-1] if "-" in f.fontname else "Regular"
-style_display = STYLE_MAP.get(style_suffix, style_suffix)
+style_display, ps_weight, os2_weight = STYLE_MAP.get(style_suffix, (style_suffix, "Book", 400))
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # UPDATE FONT PROPERTIES
@@ -40,6 +40,8 @@ style_display = STYLE_MAP.get(style_suffix, style_suffix)
 f.fontname = f"{FAMILY}-{style_suffix}"
 f.familyname = FAMILY
 f.fullname = f"{FAMILY} {style_display}"
+f.weight = ps_weight
+f.os2_weight = os2_weight
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # UPDATE SFNT NAME TABLE
@@ -67,4 +69,5 @@ count = 0
 for name in f.sfnt_names:
     count += 1
 print(f"  Updated {count} name entries for {FAMILY} {style_display}")
+print(f"  PS weight: {ps_weight}, OS/2 usWeightClass: {os2_weight}")
 print("Done.")

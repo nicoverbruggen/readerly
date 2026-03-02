@@ -34,11 +34,17 @@ FLATPAK_APP = "org.fontforge.FontForge"
 REGULAR_VF = os.path.join(SRC_DIR, "Newsreader-VariableFont_opsz,wght.ttf")
 ITALIC_VF  = os.path.join(SRC_DIR, "Newsreader-Italic-VariableFont_opsz,wght.ttf")
 
+with open(os.path.join(ROOT_DIR, "VERSION")) as _vf:
+    FONT_VERSION = _vf.read().strip()
+
+with open(os.path.join(ROOT_DIR, "COPYRIGHT")) as _cf:
+    COPYRIGHT_TEXT = _cf.read().strip()
+
 VARIANTS = [
     # (output_name, source_vf, wght, opsz)
-    ("Readerly-Regular",    REGULAR_VF, 430, 9),
+    ("Readerly-Regular",    REGULAR_VF, 450, 9),
     ("Readerly-Bold",       REGULAR_VF, 550, 9),
-    ("Readerly-Italic",     ITALIC_VF,  430, 9),
+    ("Readerly-Italic",     ITALIC_VF,  450, 9),
     ("Readerly-BoldItalic", ITALIC_VF,  550, 9),
 ]
 
@@ -187,6 +193,8 @@ def main():
     metrics_code    = load_script_as_function(os.path.join(SCRIPTS_DIR, "metrics.py"))
     lineheight_code = load_script_as_function(os.path.join(SCRIPTS_DIR, "lineheight.py"))
     rename_code     = load_script_as_function(os.path.join(SCRIPTS_DIR, "rename.py"))
+    version_code    = load_script_as_function(os.path.join(SCRIPTS_DIR, "version.py"))
+    license_code    = load_script_as_function(os.path.join(SCRIPTS_DIR, "license.py"))
 
     for name in variant_names:
         sfd_path = os.path.join(MUTATED_DIR, f"{name}.sfd")
@@ -195,12 +203,16 @@ def main():
 
         # Set fontname so rename.py can detect the correct style suffix
         set_fontname = f'f.fontname = {name!r}'
+        set_version  = f'VERSION = {FONT_VERSION!r}'
+        set_license  = f'COPYRIGHT_TEXT = {COPYRIGHT_TEXT!r}'
 
         script = build_per_font_script(sfd_path, sfd_path, [
             ("Setting vertical metrics", metrics_code),
             ("Adjusting line height", lineheight_code),
             ("Setting fontname for rename", set_fontname),
             ("Updating font names", rename_code),
+            ("Setting version", set_version + "\n" + version_code),
+            ("Setting license", set_license + "\n" + license_code),
         ])
         run_fontforge_script(script)
 

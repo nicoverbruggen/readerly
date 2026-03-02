@@ -16,6 +16,7 @@ To accomplish this, I wanted to start from the 9pt font, which I exported. Then,
   - `metrics.py`: sets vertical metrics (OS/2 Typo, Win, hhea)
   - `lineheight.py`: adjusts OS/2 Typo metrics to control line spacing
   - `rename.py`: updates font name metadata from Newsreader to Readerly
+  - `version.py`: sets the font version from `./VERSION`
 - `./src_processed`: intermediate files after instancing/processing (generated)
 - `./out`: final TTF fonts (generated)
 
