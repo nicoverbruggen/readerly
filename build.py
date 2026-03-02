@@ -36,9 +36,9 @@ ITALIC_VF  = os.path.join(SRC_DIR, "Newsreader-Italic-VariableFont_opsz,wght.ttf
 
 VARIANTS = [
     # (output_name, source_vf, wght, opsz)
-    ("Readerly-Regular",    REGULAR_VF, 430, 9),
+    ("Readerly-Regular",    REGULAR_VF, 425, 9),
     ("Readerly-Bold",       REGULAR_VF, 550, 9),
-    ("Readerly-Italic",     ITALIC_VF,  430, 9),
+    ("Readerly-Italic",     ITALIC_VF,  425, 9),
     ("Readerly-BoldItalic", ITALIC_VF,  550, 9),
 ]
 
@@ -171,7 +171,8 @@ def main():
     # Step 2: Apply vertical scale (opens TTF, saves as SFD)
     print("\n── Step 2: Scale lowercase ──\n")
 
-    scale_code = load_script_as_function(os.path.join(SCRIPTS_DIR, "scale.py"))
+    scale_code    = load_script_as_function(os.path.join(SCRIPTS_DIR, "scale.py"))
+    condense_code = load_script_as_function(os.path.join(SCRIPTS_DIR, "condense.py"))
 
     clear_code = "\n".join(
         f'if {g!r} in f:\n'
@@ -188,6 +189,7 @@ def main():
         script = build_per_font_script(ttf_path, sfd_path, [
             ("Clearing problematic glyphs", clear_code),
             ("Scaling Y", scale_code),
+            ("Condensing X", condense_code),
         ])
         run_fontforge_script(script)
 
