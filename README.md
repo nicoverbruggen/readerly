@@ -8,21 +8,21 @@ I asked myself the question: how close can we get to the metrics of Bookerly whi
 
 The goal was to get a metrically/visually similar font, without actually copying glyphs or anything that would infringe upon the rights of the original creators; after all, Newsreader is a very beautiful font as a starting point.
 
-To get to the final result, I decided to use the variable font and work on it. The original is located in `./src` and is available under the same OFL as the end result.
+To get to the final result, I decided to use the variable font and work on it. The original is located in `src` and is available under the same OFL as the end result, which is included in `LICENSE`.
 
 ## Project structure
 
-- `./src`: Newsreader variable font TTFs
-- `./scripts`: FontForge Python scripts applied during the build
-- `./build.py`: The build script to generate Readerly
+- `src`: Newsreader variable font TTFs
+- `scripts`: FontForge Python scripts applied during the build
+- `build.py`: The build script to generate Readerly
 - `LICENSE`: The OFL license
 - `COPYRIGHT`: Copyright information, later embedded in font
 - `VERSION`: The version number, later embedded in font
 
-After running `./build.py`, you should get:
+After running `build.py`, you should get:
 
-- `./out/sfd`: FontForge source files (generated)
-- `./out/ttf`: final TTF fonts (generated)
+- `out/sfd`: FontForge source files (generated)
+- `out/ttf`: final TTF fonts (generated)
 
 ## Building
 
