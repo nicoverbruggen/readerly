@@ -22,13 +22,26 @@ import textwrap
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # CONFIGURATION
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#
+# Most of these values are safe to tweak. The --customize flag only toggles
+# a small subset at runtime (family name, old-style kerning, outline fixes).
+#
+# Quick reference (what each knob does):
+# - REGULAR_VF / ITALIC_VF: input variable fonts from ./src
+# - DEFAULT_FAMILY: default output family name
+# - VARIANT_STYLES: (style, source VF, wght, opsz) pins for instancing
+# - SCALE_LOWER_X/Y: lowercase-only scale (x-height tuning)
+# - CONDENSE_X: horizontal condense for all glyphs
+# - LINE_HEIGHT: Typo line height (default line spacing)
+# - SELECTION_HEIGHT: Win/hhea selection box height and clipping
+# - ASCENDER_RATIO: ascender share of total height
+# - STYLE_MAP: naming/weight metadata per style
 
 ROOT_DIR    = os.path.dirname(os.path.abspath(__file__))
 SRC_DIR     = os.path.join(ROOT_DIR, "src")
 OUT_DIR     = os.path.join(ROOT_DIR, "out")
-OUT_SFD_DIR = os.path.join(OUT_DIR, "sfd")
-OUT_TTF_DIR = os.path.join(OUT_DIR, "ttf")
-SCRIPTS_DIR = os.path.join(ROOT_DIR, "scripts")
+OUT_SFD_DIR = os.path.join(OUT_DIR, "sfd")  # generated FontForge sources
+OUT_TTF_DIR = os.path.join(OUT_DIR, "ttf")  # generated TTFs
 
 REGULAR_VF = os.path.join(SRC_DIR, "Newsreader-VariableFont_opsz,wght.ttf")
 ITALIC_VF  = os.path.join(SRC_DIR, "Newsreader-Italic-VariableFont_opsz,wght.ttf")
@@ -39,15 +52,48 @@ with open(os.path.join(ROOT_DIR, "VERSION")) as _vf:
 with open(os.path.join(ROOT_DIR, "COPYRIGHT")) as _cf:
     COPYRIGHT_TEXT = _cf.read().strip()
 
-DEFAULT_FAMILY = "Readerly"
+DEFAULT_FAMILY = "Readerly"  # default if --customize not used
 
 VARIANT_STYLES = [
     # (style_suffix, source_vf, wght, opsz)
+    # opsz=9 is intentionally small to tighten letterforms for e-readers.
     ("Regular",    REGULAR_VF, 450, 9),
     ("Bold",       REGULAR_VF, 650, 9),
     ("Italic",     ITALIC_VF,  450, 9),
     ("BoldItalic", ITALIC_VF,  650, 9),
 ]
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# INLINE FONTFORGE SCRIPT CONFIG
+# (Migrated from ./scripts for readability and single-file builds.)
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#
+# Step 2: Scaling + overlap cleanup
+# - SCALE_LOWER_* affects lowercase only (x-height tuning).
+# - CONDENSE_X narrows all glyphs to match Bookerly-like widths.
+
+# Scale lowercase glyphs vertically (and slightly widen).
+SCALE_LOWER_X = 1.03
+SCALE_LOWER_Y = 1.08
+
+# Condense all glyphs horizontally.
+CONDENSE_X = 0.95
+
+# Step 3: Vertical metrics + line spacing (relative to UPM)
+# - LINE_HEIGHT drives OS/2 Typo metrics (default line spacing)
+# - SELECTION_HEIGHT drives Win/hhea metrics (selection box + clipping)
+# - ASCENDER_RATIO splits the total height between ascender/descender
+LINE_HEIGHT = 1.0
+SELECTION_HEIGHT = 1.3
+ASCENDER_RATIO = 0.8
+
+# Step 3: Naming and style metadata (used by the rename step)
+STYLE_MAP = {
+    "Regular":    ("Regular",     "Book", 400),
+    "Bold":       ("Bold",        "Bold", 700),
+    "Italic":     ("Italic",      "Book", 400),
+    "BoldItalic": ("Bold Italic", "Bold", 700),
+}
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # HELPERS
@@ -146,16 +192,317 @@ def build_per_font_script(open_path, save_path, steps):
     return "\n".join(parts)
 
 
-def load_script_as_function(script_path):
-    """
-    Read a script file and adapt it from using fontforge.activeFont() to
-    using a pre-opened font variable `f`.
-    """
-    with open(script_path) as fh:
-        code = fh.read()
-    # Replace activeFont() call — the font is already open as `f`
-    code = code.replace("fontforge.activeFont()", "f")
-    return code
+def ff_scale_lowercase_script():
+    """FontForge script: scale lowercase glyphs vertically."""
+    return textwrap.dedent(f"""\
+        import psMat
+        import unicodedata
+
+        # Scale lowercase glyphs only, from glyph origin.
+        SCALE_X = {SCALE_LOWER_X}
+        SCALE_Y = {SCALE_LOWER_Y}
+
+        mat = psMat.scale(SCALE_X, SCALE_Y)
+
+        f.selection.none()
+        count = 0
+        for g in f.glyphs():
+            if g.unicode < 0:
+                continue
+            try:
+                cat = unicodedata.category(chr(g.unicode))
+            except (ValueError, OverflowError):
+                continue
+            if cat == "Ll" or g.unicode in (0x00AA, 0x00BA):
+                f.selection.select(("more",), g.glyphname)
+                count += 1
+
+        f.transform(mat, ("round",))
+        print(f"  Scaled {{count}} lowercase glyphs by X={{SCALE_X:.0%}}, Y={{SCALE_Y:.0%}}")
+    """)
+
+
+def ff_condense_script():
+    """FontForge script: condense all glyphs horizontally."""
+    return textwrap.dedent(f"""\
+        import psMat
+
+        SCALE_X = {CONDENSE_X}
+        mat = psMat.scale(SCALE_X, 1.0)
+
+        f.selection.all()
+        f.transform(mat, ("round",))
+
+        count = sum(1 for g in f.glyphs() if g.isWorthOutputting())
+        print(f"  Condensed {{count}} glyphs by X={{SCALE_X:.0%}}")
+    """)
+
+
+def ff_remove_overlaps_script():
+    """FontForge script: merge overlapping contours and fix direction."""
+    return textwrap.dedent("""\
+        f.selection.all()
+        f.removeOverlap()
+        f.correctDirection()
+
+        count = sum(1 for g in f.glyphs() if g.isWorthOutputting())
+        print(f"  Removed overlaps and corrected direction for {count} glyphs")
+    """)
+
+
+def ff_metrics_script():
+    """FontForge script: measure landmarks and set OS/2 Typo metrics."""
+    return textwrap.dedent("""\
+def _bbox(name):
+    # Return bounding box (xmin, ymin, xmax, ymax) or None.
+    if name in f and f[name].isWorthOutputting():
+        bb = f[name].boundingBox()
+        if bb != (0, 0, 0, 0):
+            return bb
+    return None
+
+def measure_chars(chars, *, axis="top"):
+    # Measure a set of reference characters.
+    #   axis="top"    -> return the highest yMax
+    #   axis="bottom" -> return the lowest  yMin
+    # Returns (value, display_char) or (None, None).
+    idx  = 3 if axis == "top" else 1
+    pick = max if axis == "top" else min
+    hits = []
+    for ch in chars:
+        name = fontforge.nameFromUnicode(ord(ch))
+        bb = _bbox(name)
+        if bb is not None:
+            hits.append((bb[idx], ch))
+    if not hits:
+        return None, None
+    return pick(hits, key=lambda t: t[0])
+
+def scan_font_extremes():
+    # Walk every output glyph; return (yMax, yMin, max_name, min_name).
+    y_max, y_min = 0, 0
+    max_nm, min_nm = None, None
+    for g in f.glyphs():
+        if not g.isWorthOutputting():
+            continue
+        bb = g.boundingBox()
+        if bb == (0, 0, 0, 0):
+            continue
+        if bb[3] > y_max:
+            y_max, max_nm = bb[3], g.glyphname
+        if bb[1] < y_min:
+            y_min, min_nm = bb[1], g.glyphname
+    return y_max, y_min, max_nm, min_nm
+
+print("─── Design landmarks ───\\n")
+
+cap_h, cap_c = measure_chars("HIOX", axis="top")
+asc_h, asc_c = measure_chars("bdfhkl", axis="top")
+xht_h, xht_c = measure_chars("xuvw", axis="top")
+dsc_h, dsc_c = measure_chars("gpqyj", axis="bottom")
+
+for label, val, ch in [
+    ("Cap height", cap_h, cap_c),
+    ("Ascender",   asc_h, asc_c),
+    ("x-height",   xht_h, xht_c),
+    ("Descender",  dsc_h, dsc_c),
+]:
+    if val is not None:
+        print(f"  {label:12s}  {int(val):>6}  ('{ch}')")
+    else:
+        print(f"  {label:12s}  {'N/A':>6}")
+
+print("\\n─── Full font scan ───\\n")
+
+font_ymax, font_ymin, ymax_name, ymin_name = scan_font_extremes()
+print(f"  Highest glyph:  {int(font_ymax):>6}  ({ymax_name})")
+print(f"  Lowest  glyph:  {int(font_ymin):>6}  ({ymin_name})")
+
+upm = f.em
+
+design_top = asc_h if asc_h is not None else cap_h
+design_bot = dsc_h   # negative value
+
+if design_top is None or design_bot is None:
+    raise SystemExit(
+        "ERROR: Could not measure ascender/cap-height or descender.\\n"
+        "       Make sure your font contains basic Latin glyphs (H, b, p, etc.)."
+    )
+
+typo_ascender  = int(round(design_top))
+typo_descender = int(round(design_bot))
+
+f.os2_typoascent  = typo_ascender
+f.os2_typodescent = typo_descender
+f.os2_typolinegap = 0
+
+if hasattr(f, "os2_xheight") and xht_h is not None:
+    f.os2_xheight = int(round(xht_h))
+if hasattr(f, "os2_capheight") and cap_h is not None:
+    f.os2_capheight = int(round(cap_h))
+
+# Win/hhea set to same initial values; lineheight step overrides these.
+f.os2_winascent  = typo_ascender
+f.os2_windescent = abs(typo_descender)
+f.hhea_ascent    = typo_ascender
+f.hhea_descent   = typo_descender
+f.hhea_linegap   = 0
+
+typo_metrics_set = False
+
+if hasattr(f, "os2_use_typo_metrics"):
+    f.os2_use_typo_metrics = True
+    typo_metrics_set = True
+
+if not typo_metrics_set and hasattr(f, "os2_fsselection"):
+    f.os2_fsselection |= (1 << 7)
+    typo_metrics_set = True
+
+if not typo_metrics_set:
+    if hasattr(f, "os2_version") and f.os2_version < 4:
+        f.os2_version = 4
+
+if not typo_metrics_set:
+    print("  WARNING: Could not set USE_TYPO_METRICS programmatically.")
+    print("  -> In Font Info -> OS/2 -> Misc, tick 'USE_TYPO_METRICS'.\\n")
+
+typo_line = typo_ascender - typo_descender
+
+print(f"\\n─── Applied metrics ───\\n")
+print(f"  UPM:  {upm}")
+print(f"  Typo: {typo_ascender} / {typo_descender} (ink span: {typo_line}, {typo_line/upm:.2f}x UPM)")
+
+if cap_h is not None:
+    print(f"  Cap height:   {int(cap_h)}")
+if xht_h is not None:
+    print(f"  x-height:     {int(xht_h)}")
+""")
+
+
+def ff_lineheight_script():
+    """FontForge script: set line height and selection box metrics."""
+    return textwrap.dedent(f"""\
+        # Line height (Typo) as a multiple of UPM.
+        LINE_HEIGHT = {LINE_HEIGHT}
+
+        # Selection box height (Win/hhea) as a multiple of UPM.
+        SELECTION_HEIGHT = {SELECTION_HEIGHT}
+
+        # Ascender share of the line/selection height.
+        ASCENDER_RATIO = {ASCENDER_RATIO}
+
+        upm = f.em
+
+        # OS/2 Typo — controls line spacing
+        typo_total = int(round(upm * LINE_HEIGHT))
+        typo_asc   = int(round(typo_total * ASCENDER_RATIO))
+        typo_dsc   = typo_asc - typo_total   # negative
+
+        f.os2_typoascent  = typo_asc
+        f.os2_typodescent = typo_dsc
+        f.os2_typolinegap = 0
+
+        # Win/hhea — controls selection box height and clipping
+        sel_total = int(round(upm * SELECTION_HEIGHT))
+        sel_asc   = int(round(sel_total * ASCENDER_RATIO))
+        sel_dsc   = sel_total - sel_asc
+
+        f.hhea_ascent    = sel_asc
+        f.hhea_descent   = -sel_dsc
+        f.hhea_linegap   = 0
+        f.os2_winascent  = sel_asc
+        f.os2_windescent = sel_dsc
+
+        print(f"  Typo: {{typo_asc}} / {{typo_dsc}} / gap 0  (line height: {{typo_total}}, {LINE_HEIGHT:.2f}x UPM)")
+        print(f"  hhea: {{sel_asc}} / {{-sel_dsc}} / gap 0  (selection: {{sel_total}}, {SELECTION_HEIGHT:.2f}x UPM)")
+        print(f"  Win:  {{sel_asc}} / {{sel_dsc}}")
+    """)
+
+
+def ff_rename_script():
+    """FontForge script: update font name metadata."""
+    style_map = repr(STYLE_MAP)
+    return textwrap.dedent(f"""\
+        # FAMILY is injected by build.py; default if run standalone.
+        if "FAMILY" not in dir():
+            FAMILY = "Readerly"
+
+        STYLE_MAP = {style_map}
+
+        # Determine style from the current fontname (e.g. "Readerly-BoldItalic")
+        style_suffix = f.fontname.split("-")[-1] if "-" in f.fontname else "Regular"
+        style_display, ps_weight, os2_weight = STYLE_MAP.get(
+            style_suffix, (style_suffix, "Book", 400)
+        )
+
+        f.fontname = f"{{FAMILY}}-{{style_suffix}}"
+        f.familyname = FAMILY
+        f.fullname = f"{{FAMILY}} {{style_display}}"
+        f.weight = ps_weight
+        f.os2_weight = os2_weight
+
+        # Set head.macStyle for style linking if supported by FontForge
+        if hasattr(f, "macstyle"):
+            macstyle = f.macstyle
+            macstyle &= ~((1 << 0) | (1 << 1))
+            if "Bold" in style_suffix:
+                macstyle |= (1 << 0)
+            if "Italic" in style_suffix:
+                macstyle |= (1 << 1)
+            f.macstyle = macstyle
+
+        lang = "English (US)"
+
+        f.appendSFNTName(lang, "Family", FAMILY)
+        f.appendSFNTName(lang, "SubFamily", style_display)
+        f.appendSFNTName(lang, "Fullname", f"{{FAMILY}} {{style_display}}")
+        f.appendSFNTName(lang, "PostScriptName", f"{{FAMILY}}-{{style_suffix}}")
+        f.appendSFNTName(lang, "Preferred Family", FAMILY)
+        f.appendSFNTName(lang, "Preferred Styles", style_display)
+        f.appendSFNTName(lang, "Compatible Full", f"{{FAMILY}} {{style_display}}")
+        f.appendSFNTName(lang, "UniqueID", f"{{FAMILY}} {{style_display}}")
+
+        # Clear Newsreader-specific entries
+        f.appendSFNTName(lang, "Trademark", "")
+        f.appendSFNTName(lang, "Manufacturer", "")
+        f.appendSFNTName(lang, "Designer", "")
+        f.appendSFNTName(lang, "Vendor URL", "")
+        f.appendSFNTName(lang, "Designer URL", "")
+
+        count = 0
+        for _name in f.sfnt_names:
+            count += 1
+        print(f"  Updated {{count}} name entries for {{FAMILY}} {{style_display}}")
+        print(f"  PS weight: {{ps_weight}}, OS/2 usWeightClass: {{os2_weight}}")
+    """)
+
+
+def ff_version_script():
+    """FontForge script: set font version."""
+    return textwrap.dedent("""\
+        # VERSION is injected by build.py before this script runs.
+        version_str = "Version " + VERSION
+
+        f.version = VERSION
+        f.sfntRevision = float(VERSION)
+        f.appendSFNTName("English (US)", "Version", version_str)
+
+        print(f"  Version set to: {version_str}")
+        print(f"  head.fontRevision set to: {float(VERSION)}")
+    """)
+
+
+def ff_license_script():
+    """FontForge script: set copyright."""
+    return textwrap.dedent("""\
+        # COPYRIGHT_TEXT is injected by build.py before this script runs.
+        lang = "English (US)"
+
+        f.copyright = COPYRIGHT_TEXT
+        f.appendSFNTName(lang, "Copyright", COPYRIGHT_TEXT)
+
+        print(f"  Copyright: {COPYRIGHT_TEXT.splitlines()[0]}")
+    """)
 
 
 def build_export_script(sfd_path, ttf_path, old_kern=True):
@@ -349,9 +696,9 @@ def _build(tmp_dir, family=DEFAULT_FAMILY, old_kern=True, outline_fix=True):
     # Step 2: Apply vertical scale (opens TTF, saves as SFD)
     print("\n── Step 2: Scale lowercase ──\n")
 
-    scale_code    = load_script_as_function(os.path.join(SCRIPTS_DIR, "scale.py"))
-    condense_code = load_script_as_function(os.path.join(SCRIPTS_DIR, "condense.py"))
-    overlap_code  = load_script_as_function(os.path.join(SCRIPTS_DIR, "overlaps.py"))
+    scale_code = ff_scale_lowercase_script()
+    condense_code = ff_condense_script()
+    overlap_code = ff_remove_overlaps_script()
 
     for name in variant_names:
         ttf_path = os.path.join(tmp_dir, f"{name}.ttf")
@@ -370,11 +717,11 @@ def _build(tmp_dir, family=DEFAULT_FAMILY, old_kern=True, outline_fix=True):
     # Step 3: Apply metrics and rename (opens SFD, saves as SFD)
     print("\n── Step 3: Apply metrics and rename ──\n")
 
-    metrics_code    = load_script_as_function(os.path.join(SCRIPTS_DIR, "metrics.py"))
-    lineheight_code = load_script_as_function(os.path.join(SCRIPTS_DIR, "lineheight.py"))
-    rename_code     = load_script_as_function(os.path.join(SCRIPTS_DIR, "rename.py"))
-    version_code    = load_script_as_function(os.path.join(SCRIPTS_DIR, "version.py"))
-    license_code    = load_script_as_function(os.path.join(SCRIPTS_DIR, "license.py"))
+    metrics_code = ff_metrics_script()
+    lineheight_code = ff_lineheight_script()
+    rename_code = ff_rename_script()
+    version_code = ff_version_script()
+    license_code = ff_license_script()
 
     for name in variant_names:
         sfd_path = os.path.join(tmp_dir, f"{name}.sfd")

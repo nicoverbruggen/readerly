@@ -15,7 +15,6 @@ To get to the final result, I decided to use the variable font and work on it. T
 ## Project structure
 
 - `src`: Newsreader variable font TTFs
-- `scripts`: FontForge Python scripts applied during the build
 - `build.py`: The build script to generate Readerly
 - `LICENSE`: The OFL license
 - `COPYRIGHT`: Copyright information, later embedded in font
@@ -40,9 +39,15 @@ flatpak install flathub org.fontforge.FontForge
 ```
 
 ### macOS preparation
-```
+
+On macOS, if you're using the built-in version of Python (via Xcode), you may need to first add a folder to your `PATH` to make `font-line` available, like:
+
+```bash
+echo 'export PATH="$HOME/Library/Python/3.9/bin:$PATH"' >> ~/.zshrc
 brew install fontforge
-python3 -m pip install --user -U fonttools
+brew unlink python3 # ensure that python3 isn't linked via Homebrew
+pip3 install fonttools font-line
+source ~/.zshrc
 ```
 
 ## Building
@@ -57,44 +62,4 @@ To customize the font family name, disable old-style kerning, or skip outline fi
 python3 build.py --customize
 ```
 
-The build script (`build.py`) uses `fontTools` and FontForge to transform the Newsreader variable fonts into Readerly. Each step is described below.
-
-#### Step 1: Instancing
-
-The Newsreader variable font supports two axes: optical size (`opsz`) and weight (`wght`). Using `fontTools.instancer`, the variable fonts are pinned to specific axis values to produce static TTFs. A small optical size (`opsz=9`) is used as the starting point because it produces tighter, more compact letterforms that resemble Bookerly's proportions.
-
-Variant configuration (in `build.py`):
-- Regular: wght=450, opsz=9
-- Bold: wght=650, opsz=9
-- Italic: wght=450, opsz=9
-- BoldItalic: wght=650, opsz=9
-
-#### Step 2: Scaling, condensing, and overlap removal
-
-Three transforms are applied in sequence via FontForge:
-
-- **Vertical scaling** (`scale.py`): Lowercase glyphs are scaled up vertically (and slightly horizontally) to increase the x-height, bringing it closer to Bookerly's proportions.
-- **Horizontal condensing** (`condense.py`): All glyphs are narrowed slightly to match Bookerly's more compact character widths.
-- **Overlap removal** (`overlaps.py`): Overlapping contours are merged into clean, unified outlines and winding direction is corrected. Variable fonts commonly use overlapping paths to aid interpolation between weights. After instancing, these overlaps remain. While desktop renderers handle this fine, e-readers like Kobo apply synthetic font weight scaling that can cause visible artifacts (gaps, blobs, uneven strokes) when contours overlap. Merging the overlaps into single paths prevents these rendering issues.
-
-#### Step 3: Metrics, naming, version, and copyright
-
-Several metadata scripts are applied via FontForge:
-
-- **Vertical metrics** (`metrics.py`): Measures design landmarks (cap height, ascender, x-height, descender) from actual glyph bounding boxes and sets OS/2 Typo metrics to the ink boundaries. Enables `USE_TYPO_METRICS`.
-- **Line height** (`lineheight.py`): Overrides Win/hhea metrics to control line spacing and selection box height. Values are expressed as multiples of the font's UPM (units per em) — the coordinate grid that all glyph measurements are defined in (Newsreader uses 2000 UPM). A line height of 1.0x UPM means lines are spaced exactly one em apart, with an 80/20 ascender/descender split. The selection box height (1.32x UPM) controls the highlighted area when selecting text.
-- **Renaming** (`rename.py`): Rewrites all SFNT name table entries from Newsreader to Readerly, and sets the correct PS weight string and OS/2 weight class for each variant.
-- **Version** (`version.py`): Sets the font version and `head.fontRevision` from `./VERSION`.
-- **Copyright** (`license.py`): Sets the copyright notice from `./COPYRIGHT`.
-
-#### Step 4: Export
-
-The final fonts are exported from FontForge as TTF. Outline fixes remove overlaps and zero-area contours that can cause missing glyphs on macOS; you can disable them via `--customize`. The build supports optional old-style kern tables, but this is off by default because it has no effect on device tests. As a final post-export step, `build.py` normalizes the OS/2 style flags and `head.macStyle` with fontTools so Bold/Italic variants link correctly on Kobo.
-
-#### TTF cleanup (manual exports)
-
-Some FontForge exports emit 1–2 point contours in the `glyf` table. macOS can treat these as invalid and skip the glyph entirely (for example, `m` or italic `u`). The build pipeline removes these zero-area contours automatically. If you manually export a TTF from an SFD and see missing glyphs, run:
-
-```
-python3 cleanup_ttf.py out/ttf/Readerly-Regular.ttf
-```
+The build script (`build.py`) uses `fontTools` and FontForge to transform the Newsreader variable fonts into Readerly. Configuration and step-by-step details live in the header comments of `build.py`.
