@@ -35,14 +35,14 @@ jobs:
       - name: Upload Kobo artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Kobo_Readerly
+          name: KF_Readerly
           path: out/kf/*.ttf
 
       - name: Zip TTFs for release
         if: startsWith(github.ref, 'refs/tags/')
         run: |
           cd out/ttf && zip -j ../../Readerly.zip *.ttf
-          cd ../../out/kf && zip -j ../../Kobo_Readerly.zip *.ttf
+          cd ../../out/kf && zip -j ../../KF_Readerly.zip *.ttf
 
       - name: Upload release zips
         if: startsWith(github.ref, 'refs/tags/')
@@ -51,7 +51,7 @@ jobs:
           name: Readerly-release
           path: |
             Readerly.zip
-            Kobo_Readerly.zip
+            KF_Readerly.zip
 
   release:
     needs: build
@@ -70,4 +70,4 @@ jobs:
         with:
           files: |
             Readerly.zip
-            Kobo_Readerly.zip
+            KF_Readerly.zip

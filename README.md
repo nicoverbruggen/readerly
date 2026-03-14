@@ -12,6 +12,13 @@ The goal was to get a metrically/visually similar font, without actually copying
 
 To get to the final result, I decided to use the variable font and work on it. The original is located in `src` and is available under the same OFL as the end result, which is included in `LICENSE`.
 
+## Downloads
+
+Two versions are generated via the pipeline of the [latest release](../../releases/latest):
+
+- **KF_Readerly.zip** — Kobo-optimized TrueType fonts with a legacy kern table and `KF` prefix. Use this if you have a Kobo e-reader, this version contains optimizations made with [Kobo Font Fix](https://github.com/nicoverbruggen/kobo-font-fix).
+- **Readerly.zip** — The standard, unmodified fonts, as TrueType files. Useful for other e-readers and use on your desktop computer or smartphone.
+
 ## Project structure
 
 - `src`: Newsreader variable font TTFs
