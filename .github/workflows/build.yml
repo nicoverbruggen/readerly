@@ -17,13 +17,21 @@ jobs:
       - name: Build fonts
         run: python3 build.py
 
-      - name: Zip TTFs
-        run: cd out/ttf && zip -j ../../Readerly.zip *.ttf
-
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: Readerly
+          path: out/ttf/*.ttf
+
+      - name: Zip TTFs for release
+        if: startsWith(github.ref, 'refs/tags/')
+        run: cd out/ttf && zip -j ../../Readerly.zip *.ttf
+
+      - name: Upload release zip
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: actions/upload-artifact@v4
+        with:
+          name: Readerly-release
           path: Readerly.zip
 
   release:
@@ -36,7 +44,7 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: Readerly
+          name: Readerly-release
 
       - name: Create release
         uses: softprops/action-gh-release@v2
