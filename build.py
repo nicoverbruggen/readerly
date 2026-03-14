@@ -659,6 +659,24 @@ def autohint_ttf(ttf_path):
 # MAIN
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+def check_ttfautohint():
+    """Verify ttfautohint is installed before starting the build."""
+    if shutil.which("ttfautohint"):
+        return
+    print(
+        "ERROR: ttfautohint not found.\n"
+        "\n"
+        "ttfautohint is required for proper rendering on Kobo e-readers.\n"
+        "Install it with:\n"
+        "  macOS/Bazzite:      brew install ttfautohint\n"
+        "  Debian/Ubuntu:      sudo apt install ttfautohint\n"
+        "  Fedora:             sudo dnf install ttfautohint\n"
+        "  Arch:               sudo pacman -S ttfautohint\n",
+        file=sys.stderr,
+    )
+    sys.exit(1)
+
+
 def main():
     print("=" * 60)
     print("  Readerly Build")
@@ -666,6 +684,8 @@ def main():
 
     ff_cmd = find_fontforge()
     print(f"  FontForge: {' '.join(ff_cmd)}")
+    check_ttfautohint()
+    print(f"  ttfautohint: {shutil.which('ttfautohint')}")
 
     family   = DEFAULT_FAMILY
     old_kern = False

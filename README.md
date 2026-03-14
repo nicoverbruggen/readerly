@@ -30,10 +30,14 @@ After running `build.py`, you should get:
 - **Python 3**
 - **[fontTools](https://github.com/fonttools/fonttools)** — install with `pip install fonttools`
 - **[FontForge](https://fontforge.org)** — the build script auto-detects FontForge from PATH, Flatpak, or the macOS app bundle
+- **[ttfautohint](https://freetype.org/ttfautohint/)** — required for proper rendering on Kobo e-readers
 
 ### Linux preparation
 
 ```
+sudo apt install ttfautohint        # Debian/Ubuntu
+sudo dnf install ttfautohint        # Fedora
+brew install ttfautohint            # Bazzite (immutable Fedora)
 pip install fonttools
 flatpak install flathub org.fontforge.FontForge
 ```
@@ -44,7 +48,7 @@ On macOS, if you're using the built-in version of Python (via Xcode), you may ne
 
 ```bash
 echo 'export PATH="$HOME/Library/Python/3.9/bin:$PATH"' >> ~/.zshrc
-brew install fontforge
+brew install fontforge ttfautohint
 brew unlink python3 # ensure that python3 isn't linked via Homebrew
 pip3 install fonttools font-line
 source ~/.zshrc
