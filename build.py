@@ -87,6 +87,20 @@ LINE_HEIGHT = 1.0
 SELECTION_HEIGHT = 1.3
 ASCENDER_RATIO = 0.8
 
+# Step 4: ttfautohint options (hinting for Kobo's FreeType renderer)
+# - Kobo uses FreeType grayscale, so the 1st char of --stem-width-mode
+#   (gray) is the one that matters. n=natural, q=quantized, s=strong.
+# - Remaining two chars are for GDI and DirectWrite (not used on Kobo).
+# - Other options are left at ttfautohint defaults; uncomment to override.
+AUTOHINT_OPTS = [
+    "--no-info",
+    "--stem-width-mode=nss",
+    # "--hinting-range-min=8",
+    # "--hinting-range-max=50",
+    # "--hinting-limit=200",
+    "--increase-x-height=0",
+]
+
 # Step 3: Naming and style metadata (used by the rename step)
 STYLE_MAP = {
     "Regular":    ("Regular",     "Book", 400),
@@ -642,7 +656,7 @@ def autohint_ttf(ttf_path):
 
     tmp_path = ttf_path + ".autohint.tmp"
     result = subprocess.run(
-        ["ttfautohint", "--no-info", ttf_path, tmp_path],
+        ["ttfautohint"] + AUTOHINT_OPTS + [ttf_path, tmp_path],
         capture_output=True, text=True,
     )
     if result.returncode != 0:

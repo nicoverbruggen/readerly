@@ -44,6 +44,8 @@ flatpak install flathub org.fontforge.FontForge
 
 ### macOS preparation
 
+#### System Python
+
 On macOS, if you're using the built-in version of Python (via Xcode), you may need to first add a folder to your `PATH` to make `font-line` available, like:
 
 ```bash
@@ -54,7 +56,26 @@ pip3 install fonttools font-line
 source ~/.zshrc
 ```
 
+#### Homebrew Python
+
+If you're using `brew install python`, pip requires a virtual environment:
+
+```bash
+brew install fontforge ttfautohint
+python3 -m venv .venv
+source .venv/bin/activate
+pip install fonttools
+```
+
 ## Building
+
+**Note**: If you're using `venv`, you will need to activate it first:
+
+```
+source .venv/bin/activate
+```
+
+If you are just using the system Python, you can skip that step and simply run:
 
 ```
 python3 build.py
