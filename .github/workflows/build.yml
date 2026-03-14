@@ -17,22 +17,39 @@ jobs:
       - name: Build fonts
         run: python3 build.py
 
+      - name: Download kobofix.py
+        run: curl -sL https://raw.githubusercontent.com/nicoverbruggen/kobo-font-fix/main/kobofix.py -o kobofix.py
+
+      - name: Generate Kobo (KF) fonts
+        run: python3 kobofix.py --preset kf out/ttf/*.ttf
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: Readerly
           path: out/ttf/*.ttf
 
+      - name: Upload Kobo artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Kobo_Readerly
+          path: out/ttf/KF_*.ttf
+
       - name: Zip TTFs for release
         if: startsWith(github.ref, 'refs/tags/')
-        run: cd out/ttf && zip -j ../../Readerly.zip *.ttf
+        run: |
+          cd out/ttf
+          zip -j ../../Readerly.zip $(ls *.ttf | grep -v '^KF_')
+          zip -j ../../Kobo_Readerly.zip KF_*.ttf
 
-      - name: Upload release zip
+      - name: Upload release zips
         if: startsWith(github.ref, 'refs/tags/')
         uses: actions/upload-artifact@v4
         with:
           name: Readerly-release
-          path: Readerly.zip
+          path: |
+            Readerly.zip
+            Kobo_Readerly.zip
 
   release:
     needs: build
@@ -49,4 +66,6 @@ jobs:
       - name: Create release
         uses: softprops/action-gh-release@v2
         with:
-          files: Readerly.zip
+          files: |
+            Readerly.zip
+            Kobo_Readerly.zip
