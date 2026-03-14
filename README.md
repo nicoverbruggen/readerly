@@ -22,7 +22,6 @@ To get to the final result, I decided to use the variable font and work on it. T
 
 After running `build.py`, you should get:
 
-- `out/sfd`: FontForge source files (generated)
 - `out/ttf`: final TTF fonts (generated)
 
 ## Prerequisites
@@ -87,4 +86,4 @@ To customize the font family name, disable old-style kerning, or skip outline fi
 python3 build.py --customize
 ```
 
-The build script (`build.py`) uses `fontTools` and FontForge to transform the Newsreader variable fonts into Readerly. Configuration and step-by-step details live in the header comments of `build.py`.
+The build script (`build.py`) uses `fontTools` and FontForge to transform the Newsreader variable fonts into Readerly. After export, it post-processes the TTFs: clamping x-height overshoots that cause uneven rendering on e-ink, normalizing style flags, and autohinting with `ttfautohint` for Kobo's FreeType renderer. Configuration and step-by-step details live in the header comments of `build.py`.

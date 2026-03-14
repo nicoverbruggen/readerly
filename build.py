@@ -7,7 +7,8 @@ Orchestrates the full font build pipeline:
   1. Instances variable fonts into static TTFs (fontTools.instancer)
   2. Applies vertical scale (scale.py) via FontForge
   3. Applies vertical metrics, line height, rename (metrics.py, lineheight.py, rename.py)
-  4. Exports to SFD and TTF → ./out/sfd/ and ./out/ttf/
+  4. Exports to TTF → ./out/ttf/
+  5. Post-processes TTFs: x-height overshoot clamping, style flags, autohinting
 
 Uses FontForge (detected automatically).
 Run with: python3 build.py
@@ -40,7 +41,6 @@ import textwrap
 ROOT_DIR    = os.path.dirname(os.path.abspath(__file__))
 SRC_DIR     = os.path.join(ROOT_DIR, "src")
 OUT_DIR     = os.path.join(ROOT_DIR, "out")
-OUT_SFD_DIR = os.path.join(OUT_DIR, "sfd")  # generated FontForge sources
 OUT_TTF_DIR = os.path.join(OUT_DIR, "ttf")  # generated TTFs
 
 REGULAR_VF = os.path.join(SRC_DIR, "Newsreader-VariableFont_opsz,wght.ttf")
@@ -100,6 +100,11 @@ AUTOHINT_OPTS = [
     # "--hinting-limit=200",
     "--increase-x-height=0",
 ]
+
+# Glyphs whose x-height overshoot is an outlier (+12 vs the standard +22).
+# The inconsistent overshoot lands between the hinter's snap zones, causing
+# these glyphs to render taller than their neighbors on low-res e-ink.
+CLAMP_XHEIGHT_GLYPHS = ["u", "uogonek"]
 
 # Step 3: Naming and style metadata (used by the rename step)
 STYLE_MAP = {
@@ -601,6 +606,62 @@ def clean_ttf_degenerate_contours(ttf_path):
     font.close()
 
 
+def clamp_xheight_overshoot(ttf_path):
+    """Clamp outlier x-height overshoots in a TTF in-place.
+
+    Some glyphs (e.g. 'u') have a smaller overshoot than the standard
+    round overshoot, landing between the hinter's snap zones. This
+    flattens them to the true x-height measured from flat-topped glyphs.
+    """
+    try:
+        from fontTools.ttLib import TTFont
+    except Exception:
+        print("  [warn] Skipping x-height clamp: fontTools not available", file=sys.stderr)
+        return
+
+    font = TTFont(ttf_path)
+    glyf = font["glyf"]
+
+    # Measure x-height from flat-topped reference glyphs.
+    xheight = 0
+    for ref in ("x", "v"):
+        if ref not in glyf:
+            continue
+        coords = glyf[ref].coordinates
+        if coords:
+            ymax = max(c[1] for c in coords)
+            if ymax > xheight:
+                xheight = ymax
+
+    if xheight == 0:
+        font.close()
+        return
+
+    clamped = []
+    for name in CLAMP_XHEIGHT_GLYPHS:
+        if name not in glyf:
+            continue
+        glyph = glyf[name]
+        coords = glyph.coordinates
+        if not coords:
+            continue
+        ymax = max(c[1] for c in coords)
+        if ymax <= xheight:
+            continue
+        glyph.coordinates = type(coords)(
+            [(x, min(y, xheight)) for x, y in coords]
+        )
+        glyph_set = font.getGlyphSet()
+        if hasattr(glyph, "recalcBounds"):
+            glyph.recalcBounds(glyph_set)
+        clamped.append(name)
+
+    if clamped:
+        font.save(ttf_path)
+        print(f"  Clamped x-height overshoot for: {', '.join(clamped)} (xh={xheight})")
+    font.close()
+
+
 def fix_ttf_style_flags(ttf_path, style_suffix):
     """Normalize OS/2 fsSelection and head.macStyle for style linking."""
     try:
@@ -814,7 +875,6 @@ def _build(tmp_dir, family=DEFAULT_FAMILY, old_kern=True, outline_fix=True):
 
     # Step 4: Export to out/sfd and out/ttf
     print("\n── Step 4: Export ──\n")
-    os.makedirs(OUT_SFD_DIR, exist_ok=True)
     os.makedirs(OUT_TTF_DIR, exist_ok=True)
 
     for name in variant_names:
@@ -822,22 +882,18 @@ def _build(tmp_dir, family=DEFAULT_FAMILY, old_kern=True, outline_fix=True):
         ttf_path = os.path.join(OUT_TTF_DIR, f"{name}.ttf")
         style_suffix = name.split("-")[-1] if "-" in name else "Regular"
 
-        # Copy final SFD to out/sfd/
-        shutil.copy2(sfd_path, os.path.join(OUT_SFD_DIR, f"{name}.sfd"))
-        print(f"  -> {OUT_SFD_DIR}/{name}.sfd")
-
         # Export TTF
         script = build_export_script(sfd_path, ttf_path, old_kern=old_kern)
         run_fontforge_script(script)
         if outline_fix:
             clean_ttf_degenerate_contours(ttf_path)
+        clamp_xheight_overshoot(ttf_path)
         fix_ttf_style_flags(ttf_path, style_suffix)
         autohint_ttf(ttf_path)
 
 
     print("\n" + "=" * 60)
     print("  Build complete!")
-    print(f"  SFD fonts are in: {OUT_SFD_DIR}/")
     print(f"  TTF fonts are in: {OUT_TTF_DIR}/")
     print("=" * 60)
 
