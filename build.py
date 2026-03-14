@@ -25,7 +25,7 @@ import textwrap
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 #
 # Most of these values are safe to tweak. The --customize flag only toggles
-# a small subset at runtime (family name, old-style kerning, outline fixes).
+# a small subset at runtime (family name, outline fixes).
 #
 # Quick reference (what each knob does):
 # - REGULAR_VF / ITALIC_VF: input variable fonts from ./src
@@ -524,19 +524,15 @@ def ff_license_script():
     """)
 
 
-def build_export_script(sfd_path, ttf_path, old_kern=True):
+def build_export_script(sfd_path, ttf_path):
     """Build a FontForge script that opens an .sfd and exports to TTF."""
-    if old_kern:
-        flags_line = 'flags = ("opentype", "old-kern", "no-FFTM-table", "winkern")'
-    else:
-        flags_line = 'flags = ("opentype", "no-FFTM-table")'
     return textwrap.dedent(f"""\
         import fontforge
 
         f = fontforge.open({sfd_path!r})
         print("Exporting: " + f.fontname)
 
-        {flags_line}
+        flags = ("opentype", "no-FFTM-table")
         f.generate({ttf_path!r}, flags=flags)
 
         print("  -> " + {ttf_path!r})
@@ -763,20 +759,16 @@ def main():
     print(f"  ttfautohint: {shutil.which('ttfautohint')}")
 
     family   = DEFAULT_FAMILY
-    old_kern = False
     outline_fix  = True
 
     if "--customize" in sys.argv:
         print()
         family = input(f"  Font family name [{DEFAULT_FAMILY}]: ").strip() or DEFAULT_FAMILY
-        old_kern_input = input("  Export with old-style kerning? [y/N]: ").strip().lower()
-        old_kern = old_kern_input in ("y", "yes")
         outline_input = input("  Apply outline fixes (remove overlaps + zero-area cleanup)? [Y/n]: ").strip().lower()
         outline_fix = outline_input not in ("n", "no")
 
     print()
     print(f"  Family:    {family}")
-    print(f"  Old kern:  {'yes' if old_kern else 'no'}")
     print(f"  Outline fix: {'yes' if outline_fix else 'no'}")
     print()
 
@@ -786,12 +778,12 @@ def main():
     os.makedirs(tmp_dir)
 
     try:
-        _build(tmp_dir, family=family, old_kern=old_kern, outline_fix=outline_fix)
+        _build(tmp_dir, family=family, outline_fix=outline_fix)
     finally:
         shutil.rmtree(tmp_dir, ignore_errors=True)
 
 
-def _build(tmp_dir, family=DEFAULT_FAMILY, old_kern=True, outline_fix=True):
+def _build(tmp_dir, family=DEFAULT_FAMILY, outline_fix=True):
     variants = [(f"{family}-{style}", vf, wght, opsz)
                 for style, vf, wght, opsz in VARIANT_STYLES]
     variant_names = [name for name, _, _, _ in variants]
@@ -883,7 +875,7 @@ def _build(tmp_dir, family=DEFAULT_FAMILY, old_kern=True, outline_fix=True):
         style_suffix = name.split("-")[-1] if "-" in name else "Regular"
 
         # Export TTF
-        script = build_export_script(sfd_path, ttf_path, old_kern=old_kern)
+        script = build_export_script(sfd_path, ttf_path)
         run_fontforge_script(script)
         if outline_fix:
             clean_ttf_degenerate_contours(ttf_path)
