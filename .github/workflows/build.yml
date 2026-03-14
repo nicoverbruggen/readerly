@@ -68,6 +68,15 @@ jobs:
       - name: Create release
         uses: softprops/action-gh-release@v2
         with:
+          draft: false
+          name: ${{ github.ref_name }}
+          body: |
+            > [!TIP]
+            > **If you are using a Kobo device and reading books purchased from the Kobo Store or reading `kepub` files converted via Calibre**, you should download KF_Readerly.zip, which has fonts slightly altered for optimal kerning for the `kepub` renderer.
+
+            ### Learn more
+
+            Readerly is part of the `ebook-fonts` collection. For more information about those fonts, screenshots and how to install them, please consult the [README](https://github.com/nicoverbruggen/ebook-fonts/blob/main/README.md). The FAQ also includes an entry on how to enable ligatures on Kobo devices, which is highly recommended.
           files: |
             Readerly.zip
             KF_Readerly.zip
