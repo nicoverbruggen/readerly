@@ -8,7 +8,7 @@ Orchestrates the full font build pipeline:
   2. Applies vertical scale (scale.py) via FontForge
   3. Applies vertical metrics, line height, rename (metrics.py, lineheight.py, rename.py)
   4. Exports to TTF → ./out/ttf/
-  5. Post-processes TTFs: x-height overshoot clamping, style flags, autohinting
+  5. Post-processes TTFs: x-height overshoot clamping, style flags, kern pairs, autohinting
 
 Uses FontForge (detected automatically).
 Run with: python3 build.py
@@ -36,6 +36,7 @@ import textwrap
 # - LINE_HEIGHT: Typo line height (default line spacing)
 # - SELECTION_HEIGHT: Win/hhea selection box height and clipping
 # - ASCENDER_RATIO: ascender share of total height
+# - KERN_PAIRS: explicit GPOS kern pairs (for devices without ligatures)
 # - STYLE_MAP: naming/weight metadata per style
 
 ROOT_DIR    = os.path.dirname(os.path.abspath(__file__))
@@ -105,6 +106,13 @@ AUTOHINT_OPTS = [
 # The inconsistent overshoot lands between the hinter's snap zones, causing
 # these glyphs to render taller than their neighbors on low-res e-ink.
 CLAMP_XHEIGHT_GLYPHS = ["u", "uogonek"]
+
+# Explicit kern pairs: (left_glyph, right_glyph, kern_value_in_units).
+# Negative values tighten spacing. These are added on top of any existing
+# kerning from the source variable font.
+KERN_PAIRS = [
+    ("f", "i", -100), # this emulates the `fi` ligature
+]
 
 # Step 3: Naming and style metadata (used by the rename step)
 STYLE_MAP = {
@@ -692,6 +700,117 @@ def fix_ttf_style_flags(ttf_path, style_suffix):
     print(f"  Normalized style flags for {style_suffix}")
 
 
+def add_kern_pairs(ttf_path):
+    """Prepend explicit kern pairs to the GPOS kern table.
+
+    Devices that don't support OpenType ligatures (e.g. some e-readers)
+    fall back to individual glyphs. Without kern pairs, combinations
+    like 'fi' render with a visible gap.
+
+    Pairs are inserted at the front of the first PairPos subtable so
+    they take priority even on renderers that truncate the kern list.
+    """
+    if not KERN_PAIRS:
+        return
+
+    try:
+        from fontTools.ttLib import TTFont
+        from fontTools.ttLib.tables.otTables import PairValueRecord, ValueRecord
+    except Exception:
+        print("  [warn] Skipping kern pairs: fontTools not available", file=sys.stderr)
+        return
+
+    font = TTFont(ttf_path)
+    gpos = font.get("GPOS")
+    if gpos is None:
+        font.close()
+        print("  [warn] No GPOS table, skipping kern pairs", file=sys.stderr)
+        return
+
+    cmap = font.getBestCmap()
+    # Map glyph names: try cmap first, fall back to glyph order
+    glyph_order = set(font.getGlyphOrder())
+
+    def resolve(name):
+        # If it's a single character, look up via cmap
+        if len(name) == 1:
+            cp = ord(name)
+            if cp in cmap:
+                return cmap[cp]
+        # Otherwise treat as a glyph name
+        if name in glyph_order:
+            return name
+        return None
+
+    # Build resolved pairs
+    pairs = []
+    for left, right, value in KERN_PAIRS:
+        l = resolve(left)
+        r = resolve(right)
+        if l and r:
+            pairs.append((l, r, value))
+        else:
+            print(f"  [warn] Kern pair {left}+{right}: glyph not found", file=sys.stderr)
+
+    if not pairs:
+        font.close()
+        return
+
+    # Find the first Format 1 (individual pairs) PairPos subtable in kern
+    pair_pos = None
+    for lookup in gpos.table.LookupList.Lookup:
+        if lookup.LookupType == 2:  # PairPos
+            for subtable in lookup.SubTable:
+                if subtable.Format == 1:
+                    pair_pos = subtable
+                    break
+            if pair_pos:
+                break
+
+    if pair_pos is None:
+        font.close()
+        print("  [warn] No Format 1 PairPos subtable found, skipping kern pairs", file=sys.stderr)
+        return
+
+    count = 0
+    for left_glyph, right_glyph, value in pairs:
+        # Find or create the PairSet for the left glyph
+        try:
+            idx = pair_pos.Coverage.glyphs.index(left_glyph)
+        except ValueError:
+            # Left glyph not in coverage — add it
+            pair_pos.Coverage.glyphs.append(left_glyph)
+            from fontTools.ttLib.tables.otTables import PairSet
+            ps = PairSet()
+            ps.PairValueRecord = []
+            ps.PairValueCount = 0
+            pair_pos.PairSet.append(ps)
+            pair_pos.PairSetCount = len(pair_pos.PairSet)
+            idx = len(pair_pos.Coverage.glyphs) - 1
+
+        pair_set = pair_pos.PairSet[idx]
+
+        # Remove existing pair for same right glyph
+        pair_set.PairValueRecord = [
+            pvr for pvr in pair_set.PairValueRecord
+            if pvr.SecondGlyph != right_glyph
+        ]
+
+        # Prepend new pair so it appears first
+        pvr = PairValueRecord()
+        pvr.SecondGlyph = right_glyph
+        vr = ValueRecord()
+        vr.XAdvance = value
+        pvr.Value1 = vr
+        pair_set.PairValueRecord.insert(0, pvr)
+        pair_set.PairValueCount = len(pair_set.PairValueRecord)
+        count += 1
+
+    font.save(ttf_path)
+    font.close()
+    print(f"  Added {count} kern pair(s) to GPOS")
+
+
 def autohint_ttf(ttf_path):
     """Run ttfautohint to add proper TrueType hinting.
 
@@ -881,6 +1000,7 @@ def _build(tmp_dir, family=DEFAULT_FAMILY, outline_fix=True):
             clean_ttf_degenerate_contours(ttf_path)
         clamp_xheight_overshoot(ttf_path)
         fix_ttf_style_flags(ttf_path, style_suffix)
+        add_kern_pairs(ttf_path)
         autohint_ttf(ttf_path)
 
 
