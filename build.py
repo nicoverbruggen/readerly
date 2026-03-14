@@ -621,6 +621,40 @@ def fix_ttf_style_flags(ttf_path, style_suffix):
     print(f"  Normalized style flags for {style_suffix}")
 
 
+def autohint_ttf(ttf_path):
+    """Run ttfautohint to add proper TrueType hinting.
+
+    Kobo uses FreeType for font rasterization. Without embedded hints,
+    FreeType's auto-hinter computes "blue zones" from the outlines.
+    When a glyph (e.g. italic 't') has a curved tail that dips just
+    below the baseline, the auto-hinter snaps that edge up to y=0 —
+    shifting the entire glyph upward relative to its neighbors. This
+    is most visible at small sizes.
+
+    ttfautohint replaces FreeType's built-in auto-hinter with its own
+    hinting, which may handle sub-baseline overshoots more gracefully.
+    The resulting bytecode is baked into the font, so FreeType uses
+    the TrueType interpreter instead of falling back to auto-hinting.
+    """
+    if not shutil.which("ttfautohint"):
+        print("  [warn] ttfautohint not found, skipping", file=sys.stderr)
+        return
+
+    tmp_path = ttf_path + ".autohint.tmp"
+    result = subprocess.run(
+        ["ttfautohint", "--no-info", ttf_path, tmp_path],
+        capture_output=True, text=True,
+    )
+    if result.returncode != 0:
+        print(f"  [warn] ttfautohint failed: {result.stderr.strip()}", file=sys.stderr)
+        if os.path.exists(tmp_path):
+            os.remove(tmp_path)
+        return
+
+    os.replace(tmp_path, ttf_path)
+    print(f"  Autohinted with ttfautohint")
+
+
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # MAIN
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -764,6 +798,7 @@ def _build(tmp_dir, family=DEFAULT_FAMILY, old_kern=True, outline_fix=True):
         if outline_fix:
             clean_ttf_degenerate_contours(ttf_path)
         fix_ttf_style_flags(ttf_path, style_suffix)
+        autohint_ttf(ttf_path)
 
 
     print("\n" + "=" * 60)
