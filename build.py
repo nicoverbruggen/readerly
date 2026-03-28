@@ -8,7 +8,7 @@ Orchestrates the full font build pipeline:
   2. Applies vertical scale (scale.py) via FontForge
   3. Applies vertical metrics, line height, rename (metrics.py, lineheight.py, rename.py)
   4. Exports to TTF → ./out/ttf/
-  5. Post-processes TTFs: x-height overshoot clamping, style flags, kern pairs, autohinting
+  5. Post-processes TTFs: style flags, kern pairs, autohinting
 
 Uses FontForge (detected automatically).
 Run with: python3 build.py
@@ -43,6 +43,7 @@ ROOT_DIR    = os.path.dirname(os.path.abspath(__file__))
 SRC_DIR     = os.path.join(ROOT_DIR, "src")
 OUT_DIR     = os.path.join(ROOT_DIR, "out")
 OUT_TTF_DIR = os.path.join(OUT_DIR, "ttf")  # generated TTFs
+OUT_KF_DIR  = os.path.join(OUT_DIR, "kf")   # Kobo (KF) variants
 
 REGULAR_VF = os.path.join(SRC_DIR, "Newsreader-VariableFont_opsz,wght.ttf")
 ITALIC_VF  = os.path.join(SRC_DIR, "Newsreader-Italic-VariableFont_opsz,wght.ttf")
@@ -95,17 +96,12 @@ ASCENDER_RATIO = 0.8
 # - Other options are left at ttfautohint defaults; uncomment to override.
 AUTOHINT_OPTS = [
     "--no-info",
-    "--stem-width-mode=nss",
+    "--stem-width-mode=qss",
     # "--hinting-range-min=8",
     # "--hinting-range-max=50",
     # "--hinting-limit=200",
-    "--increase-x-height=0",
+    "--increase-x-height=14",
 ]
-
-# Glyphs whose x-height overshoot is an outlier (+12 vs the standard +22).
-# The inconsistent overshoot lands between the hinter's snap zones, causing
-# these glyphs to render taller than their neighbors on low-res e-ink.
-CLAMP_XHEIGHT_GLYPHS = ["u", "uogonek"]
 
 # Explicit kern pairs: (left_glyph, right_glyph, kern_value_in_units).
 # Negative values tighten spacing. These are added on top of any existing
@@ -610,61 +606,6 @@ def clean_ttf_degenerate_contours(ttf_path):
     font.close()
 
 
-def clamp_xheight_overshoot(ttf_path):
-    """Clamp outlier x-height overshoots in a TTF in-place.
-
-    Some glyphs (e.g. 'u') have a smaller overshoot than the standard
-    round overshoot, landing between the hinter's snap zones. This
-    flattens them to the true x-height measured from flat-topped glyphs.
-    """
-    try:
-        from fontTools.ttLib import TTFont
-    except Exception:
-        print("  [warn] Skipping x-height clamp: fontTools not available", file=sys.stderr)
-        return
-
-    font = TTFont(ttf_path)
-    glyf = font["glyf"]
-
-    # Measure x-height from flat-topped reference glyphs.
-    xheight = 0
-    for ref in ("x", "v"):
-        if ref not in glyf:
-            continue
-        coords = glyf[ref].coordinates
-        if coords:
-            ymax = max(c[1] for c in coords)
-            if ymax > xheight:
-                xheight = ymax
-
-    if xheight == 0:
-        font.close()
-        return
-
-    clamped = []
-    for name in CLAMP_XHEIGHT_GLYPHS:
-        if name not in glyf:
-            continue
-        glyph = glyf[name]
-        coords = glyph.coordinates
-        if not coords:
-            continue
-        ymax = max(c[1] for c in coords)
-        if ymax <= xheight:
-            continue
-        glyph.coordinates = type(coords)(
-            [(x, min(y, xheight)) for x, y in coords]
-        )
-        glyph_set = font.getGlyphSet()
-        if hasattr(glyph, "recalcBounds"):
-            glyph.recalcBounds(glyph_set)
-        clamped.append(name)
-
-    if clamped:
-        font.save(ttf_path)
-        print(f"  Clamped x-height overshoot for: {', '.join(clamped)} (xh={xheight})")
-    font.close()
-
 
 def fix_ttf_style_flags(ttf_path, style_suffix):
     """Normalize OS/2 fsSelection and head.macStyle for style linking."""
@@ -867,6 +808,42 @@ def check_ttfautohint():
     sys.exit(1)
 
 
+KOBOFIX_URL = (
+    "https://raw.githubusercontent.com/nicoverbruggen/kobo-font-fix/main/kobofix.py"
+)
+
+
+def _download_kobofix(dest):
+    """Download kobofix.py if not already cached."""
+    import urllib.request
+    print(f"  Downloading kobofix.py ...")
+    urllib.request.urlretrieve(KOBOFIX_URL, dest)
+    print(f"  Saved to {dest}")
+
+
+def _run_kobofix(kobofix_path, variant_names):
+    """Run kobofix.py --preset kf on built TTFs, move KF_ files to out/kf/."""
+    ttf_files = [os.path.join(OUT_TTF_DIR, f"{n}.ttf") for n in variant_names]
+    cmd = [sys.executable, kobofix_path, "--preset", "kf"] + ttf_files
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.stdout:
+        print(result.stdout, end="")
+    if result.returncode != 0:
+        print("\nERROR: kobofix.py failed", file=sys.stderr)
+        if result.stderr:
+            print(result.stderr, file=sys.stderr)
+        sys.exit(1)
+
+    os.makedirs(OUT_KF_DIR, exist_ok=True)
+    import glob
+    moved = 0
+    for kf_file in glob.glob(os.path.join(OUT_TTF_DIR, "KF_*.ttf")):
+        dest = os.path.join(OUT_KF_DIR, os.path.basename(kf_file))
+        shutil.move(kf_file, dest)
+        moved += 1
+    print(f"  Moved {moved} KF font(s) to {OUT_KF_DIR}/")
+
+
 def main():
     print("=" * 60)
     print("  Readerly Build")
@@ -998,15 +975,22 @@ def _build(tmp_dir, family=DEFAULT_FAMILY, outline_fix=True):
         run_fontforge_script(script)
         if outline_fix:
             clean_ttf_degenerate_contours(ttf_path)
-        clamp_xheight_overshoot(ttf_path)
         fix_ttf_style_flags(ttf_path, style_suffix)
         add_kern_pairs(ttf_path)
         autohint_ttf(ttf_path)
 
 
+    # Step 5: Generate Kobo (KF) variants via kobofix.py
+    print("\n── Step 5: Generate Kobo (KF) variants ──\n")
+
+    kobofix_path = os.path.join(tmp_dir, "kobofix.py")
+    _download_kobofix(kobofix_path)
+    _run_kobofix(kobofix_path, variant_names)
+
     print("\n" + "=" * 60)
     print("  Build complete!")
     print(f"  TTF fonts are in: {OUT_TTF_DIR}/")
+    print(f"  KF fonts are in:  {OUT_KF_DIR}/")
     print("=" * 60)
 
 

@@ -17,15 +17,6 @@ jobs:
       - name: Build fonts
         run: python3 build.py
 
-      - name: Download kobofix.py
-        run: curl -sL https://raw.githubusercontent.com/nicoverbruggen/kobo-font-fix/main/kobofix.py -o kobofix.py
-
-      - name: Generate Kobo (KF) fonts
-        run: |
-          python3 kobofix.py --preset kf out/ttf/*.ttf
-          mkdir -p out/kf
-          mv out/ttf/KF_*.ttf out/kf/
-
       - name: Upload artifact
         uses: actions/upload-artifact@v6
         with:
