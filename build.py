@@ -94,9 +94,10 @@ ASCENDER_RATIO = 0.8
 #   (gray) is the one that matters. n=natural, q=quantized, s=strong.
 # - Remaining two chars are for GDI and DirectWrite (not used on Kobo).
 # - Other options are left at ttfautohint defaults; uncomment to override.
+AUTOHINT_CTRL = os.path.join(SRC_DIR, "ttfautohint-ctrl.txt")
 AUTOHINT_OPTS = [
     "--no-info",
-    "--stem-width-mode=qss",
+    "--stem-width-mode=nss",
     # "--hinting-range-min=8",
     # "--hinting-range-max=50",
     # "--hinting-limit=200",
@@ -772,8 +773,11 @@ def autohint_ttf(ttf_path):
         return
 
     tmp_path = ttf_path + ".autohint.tmp"
+    opts = list(AUTOHINT_OPTS)
+    if os.path.isfile(AUTOHINT_CTRL) and os.path.getsize(AUTOHINT_CTRL) > 0:
+        opts += [f"--control-file={AUTOHINT_CTRL}"]
     result = subprocess.run(
-        ["ttfautohint"] + AUTOHINT_OPTS + [ttf_path, tmp_path],
+        ["ttfautohint"] + opts + [ttf_path, tmp_path],
         capture_output=True, text=True,
     )
     if result.returncode != 0:
