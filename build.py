@@ -90,19 +90,20 @@ SELECTION_HEIGHT = 1.3
 ASCENDER_RATIO = 0.8
 
 # Step 4: ttfautohint options (hinting for Kobo's FreeType renderer)
-# - Kobo uses FreeType grayscale, so the 1st char of --stem-width-mode
-#   (gray) is the one that matters. n=natural, q=quantized, s=strong.
-# - Remaining two chars are for GDI and DirectWrite (not used on Kobo).
-# - Other options are left at ttfautohint defaults; uncomment to override.
-AUTOHINT_CTRL = os.path.join(SRC_DIR, "ttfautohint-ctrl.txt")
+# - Kobo uses FreeType grayscale on e-ink, where gray pixels are very
+#   visible. Strong mode (s) snaps stems to integer pixels, minimising
+#   gray anti-aliasing at the cost of some shape distortion.
+# - Other options are left at ttfautohint defaults.
 AUTOHINT_OPTS = [
     "--no-info",
-    "--stem-width-mode=nss",
-    # "--hinting-range-min=8",
-    # "--hinting-range-max=50",
-    # "--hinting-limit=200",
-    "--increase-x-height=14",
+    "--stem-width-mode=qss",
 ]
+
+# Serif shelf detection: points within this distance (in font units)
+# inward from a blue zone edge get `left`/`right` direction hints so
+# ttfautohint creates explicit segments instead of interpolating them.
+# This fixes gray ghosting at serif feet (bottom) and tops (e.g. w, v).
+SERIF_SHELF_INSET = 160  # how far the shelf can be from the blue zone
 
 # Explicit kern pairs: (left_glyph, right_glyph, kern_value_in_units).
 # Negative values tighten spacing. These are added on top of any existing
@@ -753,6 +754,58 @@ def add_kern_pairs(ttf_path):
     print(f"  Added {count} kern pair(s) to GPOS")
 
 
+def _generate_serif_ctrl(ttf_path):
+    """Generate ttfautohint control instructions for serif shelf points.
+
+    Scans the font for glyph points near (but not on) blue zone edges
+    — the serif "shelves" that ttfautohint doesn't detect as segments.
+    Without explicit hints these get interpolated to fractional pixel
+    positions, causing gray ghosting on e-ink.
+
+    Bottom shelves (near baseline y=0) get `left` direction hints.
+    Top shelves (near x-height) get `right` direction hints.
+    """
+    from fontTools.ttLib import TTFont
+    font = TTFont(ttf_path)
+    glyf = font["glyf"]
+    os2 = font["OS/2"]
+    x_height = getattr(os2, "sxHeight", None) or 0
+
+    # Blue zone edges: (zone_y, tolerance, inset, direction)
+    # - tolerance: how close a glyph's "flat edge" must be to zone_y
+    # - inset: how far inward the shelf can be from the flat edge
+    # - direction: left = bottom shelf, right = top shelf
+    zones = [
+        # (zone_y, tolerance, inset, direction)
+        # tolerance: how close a glyph's flat edge must be to count
+        # inset: how far the shelf can be from the zone
+        # Shelf points are between zone_y±inset and zone_y±tolerance.
+        (0, 0, SERIF_SHELF_INSET, "left"),
+    ]
+    if x_height:
+        zones.append((x_height, 25, SERIF_SHELF_INSET, "right"))
+
+    lines = []
+    for name in sorted(glyf.keys()):
+        g = glyf[name]
+        if not g.numberOfContours or g.numberOfContours <= 0:
+            continue
+        coords = g.coordinates
+        ys = set(c[1] for c in coords)
+        for zone_y, tolerance, inset, direction in zones:
+            # Glyph must have a point near the blue zone edge
+            has_edge = any(abs(y - zone_y) <= tolerance for y in ys)
+            if not has_edge:
+                continue
+            for i, (x, y) in enumerate(coords):
+                if direction == "left" and 0 < y <= inset:
+                    lines.append(f"{name} left {i}")
+                elif direction == "right" and zone_y - inset <= y < zone_y - tolerance:
+                    lines.append(f"{name} right {i}")
+    font.close()
+    return "\n".join(lines)
+
+
 def autohint_ttf(ttf_path):
     """Run ttfautohint to add proper TrueType hinting.
 
@@ -767,19 +820,34 @@ def autohint_ttf(ttf_path):
     hinting, which may handle sub-baseline overshoots more gracefully.
     The resulting bytecode is baked into the font, so FreeType uses
     the TrueType interpreter instead of falling back to auto-hinting.
+
+    Additionally generates per-font control instructions for serif
+    shelf points that the auto-hinter would otherwise interpolate.
     """
     if not shutil.which("ttfautohint"):
         print("  [warn] ttfautohint not found, skipping", file=sys.stderr)
         return
 
-    tmp_path = ttf_path + ".autohint.tmp"
+    # Generate control instructions for this specific font's points
+    ctrl_text = _generate_serif_ctrl(ttf_path)
+    ctrl_path = ttf_path + ".ctrl.tmp"
+    ctrl_count = 0
     opts = list(AUTOHINT_OPTS)
-    if os.path.isfile(AUTOHINT_CTRL) and os.path.getsize(AUTOHINT_CTRL) > 0:
-        opts += [f"--control-file={AUTOHINT_CTRL}"]
+    if ctrl_text:
+        with open(ctrl_path, "w") as f:
+            f.write(ctrl_text)
+        opts += [f"--control-file={ctrl_path}"]
+        ctrl_count = ctrl_text.count("\n") + 1
+
+    tmp_path = ttf_path + ".autohint.tmp"
     result = subprocess.run(
         ["ttfautohint"] + opts + [ttf_path, tmp_path],
         capture_output=True, text=True,
     )
+
+    if os.path.exists(ctrl_path):
+        os.remove(ctrl_path)
+
     if result.returncode != 0:
         print(f"  [warn] ttfautohint failed: {result.stderr.strip()}", file=sys.stderr)
         if os.path.exists(tmp_path):
@@ -787,7 +855,10 @@ def autohint_ttf(ttf_path):
         return
 
     os.replace(tmp_path, ttf_path)
-    print(f"  Autohinted with ttfautohint")
+    hint_msg = "Autohinted with ttfautohint"
+    if ctrl_count:
+        hint_msg += f" ({ctrl_count} serif control hints)"
+    print(f"  {hint_msg}")
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -819,6 +890,9 @@ KOBOFIX_URL = (
 
 def _download_kobofix(dest):
     """Download kobofix.py if not already cached."""
+    if os.path.isfile(dest):
+        print(f"  Using cached kobofix.py")
+        return
     import urllib.request
     print(f"  Downloading kobofix.py ...")
     urllib.request.urlretrieve(KOBOFIX_URL, dest)
@@ -861,9 +935,18 @@ def main():
     family   = DEFAULT_FAMILY
     outline_fix  = True
 
+    # --name "Foo" sets the family name directly
+    if "--name" in sys.argv:
+        idx = sys.argv.index("--name")
+        if idx + 1 < len(sys.argv):
+            family = sys.argv[idx + 1]
+        else:
+            print("ERROR: --name requires a value", file=sys.stderr)
+            sys.exit(1)
+
     if "--customize" in sys.argv:
         print()
-        family = input(f"  Font family name [{DEFAULT_FAMILY}]: ").strip() or DEFAULT_FAMILY
+        family = input(f"  Font family name [{family}]: ").strip() or family
         outline_input = input("  Apply outline fixes (remove overlaps + zero-area cleanup)? [Y/n]: ").strip().lower()
         outline_fix = outline_input not in ("n", "no")
 
