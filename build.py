@@ -90,20 +90,32 @@ SELECTION_HEIGHT = 1.3
 ASCENDER_RATIO = 0.8
 
 # Step 4: ttfautohint options (hinting for Kobo's FreeType renderer)
-# - Kobo uses FreeType grayscale on e-ink, where gray pixels are very
-#   visible. Strong mode (s) snaps stems to integer pixels, minimising
-#   gray anti-aliasing at the cost of some shape distortion.
-# - Other options are left at ttfautohint defaults.
+# - Kobo uses FreeType grayscale, so the 1st char of --stem-width-mode
+#   matters: n=natural (least distortion), q=quantized, s=strong.
+# - x-height snapping is disabled to avoid inconsistent glyph heights.
 AUTOHINT_OPTS = [
     "--no-info",
-    "--stem-width-mode=qss",
+    "--stem-width-mode=nss",
+    "--increase-x-height=0",
+    '--x-height-snapping-exceptions=-',
 ]
 
-# Serif shelf detection: points within this distance (in font units)
-# inward from a blue zone edge get `left`/`right` direction hints so
-# ttfautohint creates explicit segments instead of interpolating them.
-# This fixes gray ghosting at serif feet (bottom) and tops (e.g. w, v).
-SERIF_SHELF_INSET = 160  # how far the shelf can be from the blue zone
+# Baseline alignment: deepen the bottom anti-aliasing of non-serifed
+# glyphs via hinting-only touch deltas (no outline changes).  This
+# shifts their bottom points down during rasterization so they produce
+# more gray below the baseline, visually matching serifed characters.
+# Each entry is (shift_px, ppem_min, ppem_max).  Shifts are in pixels
+# (multiples of 1/8, max 1.0).  Set to empty list to disable.
+BASELINE_HINT_SHIFTS = [
+    (0.125, 6, 53),
+]
+
+# Per-glyph Y ceiling: cap the top of specific glyphs to reduce
+# oversized or awkward serifs.  (glyph_name, max_y)
+# Points above max_y are clamped down to max_y.
+GLYPH_Y_CEILING = [
+    ("u", 1062),  # flatten tiny top serif tips to platform level
+]
 
 # Explicit kern pairs: (left_glyph, right_glyph, kern_value_in_units).
 # Negative values tighten spacing. These are added on top of any existing
@@ -754,54 +766,75 @@ def add_kern_pairs(ttf_path):
     print(f"  Added {count} kern pair(s) to GPOS")
 
 
-def _generate_serif_ctrl(ttf_path):
-    """Generate ttfautohint control instructions for serif shelf points.
 
-    Scans the font for glyph points near (but not on) blue zone edges
-    — the serif "shelves" that ttfautohint doesn't detect as segments.
-    Without explicit hints these get interpolated to fractional pixel
-    positions, causing gray ghosting on e-ink.
+def apply_glyph_y_ceiling(ttf_path):
+    """Clamp glyph points above a Y ceiling down to the ceiling value."""
+    if not GLYPH_Y_CEILING:
+        return
 
-    Bottom shelves (near baseline y=0) get `left` direction hints.
-    Top shelves (near x-height) get `right` direction hints.
-    """
     from fontTools.ttLib import TTFont
     font = TTFont(ttf_path)
     glyf = font["glyf"]
-    os2 = font["OS/2"]
-    x_height = getattr(os2, "sxHeight", None) or 0
+    modified = []
 
-    # Blue zone edges: (zone_y, tolerance, inset, direction)
-    # - tolerance: how close a glyph's "flat edge" must be to zone_y
-    # - inset: how far inward the shelf can be from the flat edge
-    # - direction: left = bottom shelf, right = top shelf
-    zones = [
-        # (zone_y, tolerance, inset, direction)
-        # tolerance: how close a glyph's flat edge must be to count
-        # inset: how far the shelf can be from the zone
-        # Shelf points are between zone_y±inset and zone_y±tolerance.
-        (0, 0, SERIF_SHELF_INSET, "left"),
-    ]
-    if x_height:
-        zones.append((x_height, 25, SERIF_SHELF_INSET, "right"))
+    for glyph_name, max_y in GLYPH_Y_CEILING:
+        g = glyf.get(glyph_name)
+        if not g or not g.numberOfContours or g.numberOfContours <= 0:
+            continue
+        coords = g.coordinates
+        clamped = 0
+        for j in range(len(coords)):
+            if coords[j][1] > max_y:
+                coords[j] = (coords[j][0], max_y)
+                clamped += 1
+        if clamped:
+            modified.append(f"{glyph_name}({clamped}pts)")
 
+    if modified:
+        font.save(ttf_path)
+        print(f"  Clamped Y ceiling: {', '.join(modified)}")
+    font.close()
+
+
+def _generate_baseline_shift_ctrl(ttf_path):
+    """Generate touch deltas to deepen bottom anti-aliasing of non-serifed glyphs.
+
+    For lowercase glyphs without a flat baseline (no serif foot), shifts
+    the bottom-most points down during rasterization.  Uses graduated
+    shifts from BASELINE_HINT_SHIFTS — stronger at small ppem sizes
+    where alignment is most noticeable.  No outline changes.
+    """
+    if not BASELINE_HINT_SHIFTS:
+        return ""
+
+    from fontTools.ttLib import TTFont
+    font = TTFont(ttf_path)
+    glyf = font["glyf"]
+    cmap = font.getBestCmap()
     lines = []
-    for name in sorted(glyf.keys()):
+
+    for char in "abcdefghijklmnopqrstuvwxyz":
+        code = ord(char)
+        if code not in cmap:
+            continue
+        name = cmap[code]
         g = glyf[name]
         if not g.numberOfContours or g.numberOfContours <= 0:
             continue
         coords = g.coordinates
         ys = set(c[1] for c in coords)
-        for zone_y, tolerance, inset, direction in zones:
-            # Glyph must have a point near the blue zone edge
-            has_edge = any(abs(y - zone_y) <= tolerance for y in ys)
-            if not has_edge:
-                continue
-            for i, (x, y) in enumerate(coords):
-                if direction == "left" and 0 < y <= inset:
-                    lines.append(f"{name} left {i}")
-                elif direction == "right" and zone_y - inset <= y < zone_y - tolerance:
-                    lines.append(f"{name} right {i}")
+        if 0 in ys:
+            continue  # has serif baseline
+        bottom_pts = [i for i, (x, y) in enumerate(coords) if y <= 0]
+        if not bottom_pts:
+            continue
+        pts_str = ", ".join(str(p) for p in bottom_pts)
+        for shift_px, ppem_min, ppem_max in BASELINE_HINT_SHIFTS:
+            shift = -abs(shift_px)
+            lines.append(
+                f"{name} touch {pts_str} yshift {shift:.3f} @ {ppem_min}-{ppem_max}"
+            )
+
     font.close()
     return "\n".join(lines)
 
@@ -821,15 +854,15 @@ def autohint_ttf(ttf_path):
     The resulting bytecode is baked into the font, so FreeType uses
     the TrueType interpreter instead of falling back to auto-hinting.
 
-    Additionally generates per-font control instructions for serif
-    shelf points that the auto-hinter would otherwise interpolate.
+    Additionally generates per-font touch deltas to deepen the
+    baseline anti-aliasing of non-serifed glyphs.
     """
     if not shutil.which("ttfautohint"):
         print("  [warn] ttfautohint not found, skipping", file=sys.stderr)
         return
 
     # Generate control instructions for this specific font's points
-    ctrl_text = _generate_serif_ctrl(ttf_path)
+    ctrl_text = _generate_baseline_shift_ctrl(ttf_path)
     ctrl_path = ttf_path + ".ctrl.tmp"
     ctrl_count = 0
     opts = list(AUTOHINT_OPTS)
@@ -1064,6 +1097,7 @@ def _build(tmp_dir, family=DEFAULT_FAMILY, outline_fix=True):
             clean_ttf_degenerate_contours(ttf_path)
         fix_ttf_style_flags(ttf_path, style_suffix)
         add_kern_pairs(ttf_path)
+        apply_glyph_y_ceiling(ttf_path)
         autohint_ttf(ttf_path)
 
 
