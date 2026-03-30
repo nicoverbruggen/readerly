@@ -5,10 +5,11 @@ Readerly Build Script
 Orchestrates the full font build pipeline:
 
   1. Instances variable fonts into static TTFs (fontTools.instancer)
-  2. Applies vertical scale (scale.py) via FontForge
-  3. Applies vertical metrics, line height, rename (metrics.py, lineheight.py, rename.py)
+  2. Scales, condenses, and cleans up overlaps via FontForge
+  3. Applies vertical metrics, line height, rename, version, and license via FontForge
   4. Exports to TTF → ./out/ttf/
-  5. Post-processes TTFs: style flags, kern pairs, autohinting
+  5. Post-processes TTFs: style flags, kern pairs, glyph Y ceilings, autohinting
+  6. Generates Kobo (KF) variants via kobofix.py → ./out/kf/
 
 Uses FontForge (detected automatically).
 Run with: python3 build.py
