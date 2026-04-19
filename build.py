@@ -889,10 +889,38 @@ def autohint_ttf(ttf_path):
         return
 
     os.replace(tmp_path, ttf_path)
+    # In practice, ttfautohint can leave maxp.maxSizeOfInstructions smaller
+    # than the longest emitted glyph program. Refresh it here so downstream
+    # validators like ots-sanitize don't warn about stale maxp metadata.
+    _fix_maxp_instruction_limit(ttf_path)
     hint_msg = "Autohinted with ttfautohint"
     if ctrl_count:
         hint_msg += f" ({ctrl_count} serif control hints)"
     print(f"  {hint_msg}")
+
+
+def _fix_maxp_instruction_limit(ttf_path):
+    """Sync maxp.maxSizeOfInstructions with the longest glyph bytecode program."""
+    from fontTools.ttLib import TTFont
+
+    font = TTFont(ttf_path)
+    try:
+        if "maxp" not in font or "glyf" not in font:
+            return
+
+        max_size = 0
+        for glyph_name in font.getGlyphOrder():
+            glyph = font["glyf"][glyph_name]
+            program = getattr(glyph, "program", None)
+            if program is None:
+                continue
+            max_size = max(max_size, len(program.getBytecode()))
+
+        if getattr(font["maxp"], "maxSizeOfInstructions", 0) != max_size:
+            font["maxp"].maxSizeOfInstructions = max_size
+            font.save(ttf_path)
+    finally:
+        font.close()
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

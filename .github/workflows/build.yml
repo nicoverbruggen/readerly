@@ -17,6 +17,13 @@ jobs:
       - name: Build fonts
         run: python3 build.py
 
+      - name: Validate generated fonts with ots-sanitize
+        run: |
+          for font in out/ttf/*.ttf out/kf/*.ttf; do
+            echo "Validating ${font}"
+            ots-sanitize "${font}"
+          done
+
       - name: Upload artifact
         uses: actions/upload-artifact@v6
         with:
