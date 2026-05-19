@@ -1110,9 +1110,9 @@ def _download_kobofix(dest):
 
 
 def _run_kobofix(kobofix_path, variant_names):
-    """Run kobofix.py --preset kf on built TTFs, move KF_ files to out/kf/."""
+    """Run kobofix.py --preset kf --stamp on built TTFs, move KF_ files to out/kf/."""
     ttf_files = [os.path.join(OUT_TTF_DIR, f"{n}.ttf") for n in variant_names]
-    cmd = [sys.executable, kobofix_path, "--preset", "kf"] + ttf_files
+    cmd = [sys.executable, kobofix_path, "--preset", "kf", "--stamp"] + ttf_files
     result = subprocess.run(cmd, capture_output=True, text=True)
     if result.stdout:
         print(result.stdout, end="")
