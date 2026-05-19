@@ -946,7 +946,7 @@ def check_ttfautohint():
 
 
 KOBOFIX_URL = (
-    "https://raw.githubusercontent.com/nicoverbruggen/kobo-font-fix/main/kobofix.py"
+    "https://raw.githubusercontent.com/nicoverbruggen/kobo-font-fix/v0.5.3/kobofix.py"
 )
 
 
