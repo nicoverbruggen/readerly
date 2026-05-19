@@ -125,6 +125,19 @@ KERN_PAIRS = [
     ("f", "i", -100), # this emulates the `fi` ligature
 ]
 
+# Readerly still needs synthetic Unicode coverage for precomposed Latin glyphs
+# that can be built from existing bases and combining marks. This fills gaps
+# such as U+1E47 (ṇ) for Sanskrit/IAST text like "brāhmaṇas".
+SYNTHETIC_MARK_RANGES = [
+    (0x00C0, 0x024F),  # Latin-1 Supplement + Latin Extended-A/B
+    (0x1E00, 0x1EFF),  # Latin Extended Additional
+]
+
+# The source dot-below mark sits close to the baseline when composed under
+# lowercase letters. Lower synthesized dot-below glyphs a little for clearer
+# separation at reading sizes.
+DOTBELOW_Y_OFFSET = -70
+
 # Step 3: Naming and style metadata (used by the rename step)
 STYLE_MAP = {
     "Regular":    ("Regular",     "Book", 400),
@@ -622,6 +635,140 @@ def clean_ttf_degenerate_contours(ttf_path):
 
 
 
+def add_synthetic_mark_glyphs(ttf_path):
+    """Add missing precomposed mark glyphs as simple outlines."""
+    try:
+        import unicodedata
+        from fontTools.pens.basePen import DecomposingPen
+        from fontTools.pens.boundsPen import BoundsPen
+        from fontTools.pens.transformPen import TransformPen
+        from fontTools.pens.ttGlyphPen import TTGlyphPen
+        from fontTools.ttLib import TTFont
+    except Exception:
+        print("  [warn] Skipping synthetic glyphs: fontTools not available", file=sys.stderr)
+        return
+
+    class DecomposingTTGlyphPen(DecomposingPen, TTGlyphPen):
+        pass
+
+    font = TTFont(ttf_path)
+    glyph_order = list(font.getGlyphOrder())
+    glyf = font["glyf"]
+    hmtx = font["hmtx"]
+    cmap_tables = [table for table in font["cmap"].tables if table.isUnicode()]
+    glyph_name_by_cp = dict(font.getBestCmap())
+
+    def glyph_bounds(name):
+        glyph_set = font.getGlyphSet()
+        pen = BoundsPen(glyph_set)
+        glyph_set[name].draw(pen)
+        return pen.bounds
+
+    def center_x(bounds):
+        return (bounds[0] + bounds[2]) / 2
+
+    def union_bounds(left, right):
+        if left is None:
+            return right
+        if right is None:
+            return left
+        return (
+            min(left[0], right[0]),
+            min(left[1], right[1]),
+            max(left[2], right[2]),
+            max(left[3], right[3]),
+        )
+
+    def glyph_name_for_cp(codepoint):
+        name = glyph_name_by_cp.get(codepoint)
+        if name in glyf:
+            return name
+        if add_codepoint(codepoint):
+            return glyph_name_by_cp.get(codepoint)
+        return None
+
+    def decomposition_for_cp(codepoint):
+        raw = unicodedata.decomposition(chr(codepoint))
+        if not raw or raw.startswith("<"):
+            return []
+        parts = [int(part, 16) for part in raw.split()]
+        if len(parts) < 2:
+            return []
+        if not all(unicodedata.combining(chr(part)) for part in parts[1:]):
+            return []
+        return parts
+
+    visiting = set()
+    added = []
+
+    def add_codepoint(codepoint):
+        if any(table.cmap.get(codepoint) for table in cmap_tables):
+            return True
+        if codepoint in visiting:
+            return False
+
+        parts = decomposition_for_cp(codepoint)
+        if not parts:
+            return False
+
+        base_name = glyph_name_for_cp(parts[0])
+        mark_names = [glyph_name_for_cp(part) for part in parts[1:]]
+        if base_name is None or any(name is None for name in mark_names):
+            return False
+
+        visiting.add(codepoint)
+        glyph_name = f"uni{codepoint:04X}"
+        if glyph_name not in glyf:
+            current_bounds = glyph_bounds(base_name)
+            glyph_set = font.getGlyphSet()
+            pen = DecomposingTTGlyphPen(glyph_set)
+            glyph_set[base_name].draw(pen)
+
+            for mark_name in mark_names:
+                glyph_set = font.getGlyphSet()
+                mark_bounds = glyph_bounds(mark_name)
+                x_offset = int(round(center_x(current_bounds) - center_x(mark_bounds)))
+                y_offset = DOTBELOW_Y_OFFSET if mark_name == "dotbelowcomb" else 0
+                if mark_bounds[1] > 0 and current_bounds[3] >= mark_bounds[1]:
+                    y_offset = int(round(current_bounds[3] - mark_bounds[1] + 50))
+                glyph_set[mark_name].draw(
+                    TransformPen(pen, (1, 0, 0, 1, x_offset, y_offset))
+                )
+                shifted_mark_bounds = (
+                    mark_bounds[0] + x_offset,
+                    mark_bounds[1] + y_offset,
+                    mark_bounds[2] + x_offset,
+                    mark_bounds[3] + y_offset,
+                )
+                current_bounds = union_bounds(current_bounds, shifted_mark_bounds)
+
+            glyph = pen.glyph()
+            if hasattr(glyph, "recalcBounds"):
+                glyph.recalcBounds(glyf)
+
+            glyf[glyph_name] = glyph
+            glyph_order.append(glyph_name)
+            hmtx.metrics[glyph_name] = hmtx.metrics[base_name]
+
+        for table in cmap_tables:
+            table.cmap[codepoint] = glyph_name
+        glyph_name_by_cp[codepoint] = glyph_name
+        added.append(glyph_name)
+        visiting.remove(codepoint)
+        return True
+
+    for start, end in SYNTHETIC_MARK_RANGES:
+        for codepoint in range(start, end + 1):
+            add_codepoint(codepoint)
+
+    if added:
+        font.setGlyphOrder(glyph_order)
+        glyf.glyphOrder = glyph_order
+        font.save(ttf_path)
+        print(f"  Added {len(added)} synthetic glyph(s)")
+    font.close()
+
+
 def fix_ttf_style_flags(ttf_path, style_suffix):
     """Normalize OS/2 fsSelection and head.macStyle for style linking."""
     try:
@@ -657,14 +804,11 @@ def fix_ttf_style_flags(ttf_path, style_suffix):
 
 
 def add_kern_pairs(ttf_path):
-    """Prepend explicit kern pairs to the GPOS kern table.
+    """Add explicit kern pairs to the GPOS kern table.
 
     Devices that don't support OpenType ligatures (e.g. some e-readers)
     fall back to individual glyphs. Without kern pairs, combinations
     like 'fi' render with a visible gap.
-
-    Pairs are inserted at the front of the first PairPos subtable so
-    they take priority even on renderers that truncate the kern list.
     """
     if not KERN_PAIRS:
         return
@@ -684,8 +828,10 @@ def add_kern_pairs(ttf_path):
         return
 
     cmap = font.getBestCmap()
-    # Map glyph names: try cmap first, fall back to glyph order
-    glyph_order = set(font.getGlyphOrder())
+    # Map glyph names: try cmap first, fall back to glyph order.
+    glyph_order_list = font.getGlyphOrder()
+    glyph_order = set(glyph_order_list)
+    glyph_index = {name: idx for idx, name in enumerate(glyph_order_list)}
 
     def resolve(name):
         # If it's a single character, look up via cmap
@@ -752,13 +898,15 @@ def add_kern_pairs(ttf_path):
             if pvr.SecondGlyph != right_glyph
         ]
 
-        # Prepend new pair so it appears first
         pvr = PairValueRecord()
         pvr.SecondGlyph = right_glyph
         vr = ValueRecord()
         vr.XAdvance = value
         pvr.Value1 = vr
-        pair_set.PairValueRecord.insert(0, pvr)
+        pair_set.PairValueRecord.append(pvr)
+        pair_set.PairValueRecord.sort(
+            key=lambda record: glyph_index.get(record.SecondGlyph, 10**9)
+        )
         pair_set.PairValueCount = len(pair_set.PairValueRecord)
         count += 1
 
@@ -1124,6 +1272,7 @@ def _build(tmp_dir, family=DEFAULT_FAMILY, outline_fix=True):
         run_fontforge_script(script)
         if outline_fix:
             clean_ttf_degenerate_contours(ttf_path)
+        add_synthetic_mark_glyphs(ttf_path)
         fix_ttf_style_flags(ttf_path, style_suffix)
         add_kern_pairs(ttf_path)
         apply_glyph_y_ceiling(ttf_path)
