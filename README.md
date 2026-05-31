@@ -14,10 +14,52 @@ To get to the final result, I decided to use the variable font and work on it. T
 
 ## Downloads
 
-Two versions are generated via the pipeline of the [latest release](../../releases/latest):
+Three versions are generated via the pipeline of the [latest release](../../releases/latest):
 
 - **KF_Readerly.zip** — Kobo-optimized TrueType fonts with a legacy kern table and `KF` prefix. Use this if you have a Kobo e-reader, this version contains optimizations made with [Kobo Font Fix](https://github.com/nicoverbruggen/kobo-font-fix).
 - **Readerly.zip** — The standard, unmodified fonts, as TrueType files. Useful for other e-readers and use on your desktop computer or smartphone.
+- **Readerly_Web.zip** — WOFF2 webfonts for use with `@font-face` in browsers.
+
+### Using the webfonts
+
+Extract `Readerly_Web.zip` into your project (e.g. into a `/fonts/` directory) and add the following to your CSS:
+
+```css
+@font-face {
+  font-family: 'Readerly';
+  src: url('/fonts/Readerly-Regular.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Readerly';
+  src: url('/fonts/Readerly-Bold.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Readerly';
+  src: url('/fonts/Readerly-Italic.woff2') format('woff2');
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Readerly';
+  src: url('/fonts/Readerly-BoldItalic.woff2') format('woff2');
+  font-weight: 700;
+  font-style: italic;
+  font-display: swap;
+}
+
+body {
+  font-family: 'Readerly', Georgia, serif;
+}
+```
+
+Adjust the `url()` paths to match where you placed the files.
 
 ## Project structure
 
@@ -30,11 +72,14 @@ Two versions are generated via the pipeline of the [latest release](../../releas
 After running `build.py`, you should get:
 
 - `out/ttf`: final TTF fonts (generated)
+- `out/kf`: Kobo-optimized TTF fonts (generated)
+- `out/web`: WOFF2 webfonts (generated)
 
 ## Prerequisites
 
 - **Python 3**
 - **[fontTools](https://github.com/fonttools/fonttools)** — install with `pip install fonttools`
+- **[brotli](https://pypi.org/project/Brotli/)** — required for WOFF2 generation; install with `pip install brotli`
 - **[FontForge](https://fontforge.org)** — the build script auto-detects FontForge from PATH, Flatpak, or the macOS app bundle
 - **[ttfautohint](https://freetype.org/ttfautohint/)** — required for proper rendering on Kobo e-readers
 
@@ -44,7 +89,7 @@ After running `build.py`, you should get:
 sudo apt install ttfautohint        # Debian/Ubuntu
 sudo dnf install ttfautohint        # Fedora
 brew install ttfautohint            # Bazzite (immutable Fedora)
-pip install fonttools
+pip install fonttools brotli
 flatpak install flathub org.fontforge.FontForge
 ```
 
@@ -58,7 +103,7 @@ On macOS, if you're using the built-in version of Python (via Xcode), you may ne
 echo 'export PATH="$HOME/Library/Python/3.9/bin:$PATH"' >> ~/.zshrc
 brew install fontforge ttfautohint
 brew unlink python3 # ensure that python3 isn't linked via Homebrew
-pip3 install fonttools font-line
+pip3 install fonttools font-line brotli
 source ~/.zshrc
 ```
 
@@ -70,7 +115,7 @@ If you're using `brew install python`, pip requires a virtual environment:
 brew install fontforge ttfautohint
 python3 -m venv .venv
 source .venv/bin/activate
-pip install fonttools
+pip install fonttools brotli
 ```
 
 ## Building

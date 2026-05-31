@@ -45,6 +45,7 @@ SRC_DIR     = os.path.join(ROOT_DIR, "src")
 OUT_DIR     = os.path.join(ROOT_DIR, "out")
 OUT_TTF_DIR = os.path.join(OUT_DIR, "ttf")  # generated TTFs
 OUT_KF_DIR  = os.path.join(OUT_DIR, "kf")   # Kobo (KF) variants
+OUT_WEB_DIR = os.path.join(OUT_DIR, "web")  # WOFF2 webfonts
 
 REGULAR_VF = os.path.join(SRC_DIR, "Newsreader-VariableFont_opsz,wght.ttf")
 ITALIC_VF  = os.path.join(SRC_DIR, "Newsreader-Italic-VariableFont_opsz,wght.ttf")
@@ -1094,6 +1095,31 @@ def _fix_maxp_instruction_limit(ttf_path):
 # MAIN
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+def convert_to_woff2(ttf_path, woff2_path):
+    """Convert a TTF to WOFF2 using fontTools (requires `brotli`)."""
+    try:
+        from fontTools.ttLib import TTFont
+    except Exception:
+        print("  [warn] Skipping WOFF2: fontTools not available", file=sys.stderr)
+        return
+    try:
+        import brotli  # noqa: F401
+    except Exception:
+        print(
+            "  [warn] Skipping WOFF2: 'brotli' package not installed "
+            "(pip install brotli)",
+            file=sys.stderr,
+        )
+        return
+
+    font = TTFont(ttf_path)
+    font.flavor = "woff2"
+    font.save(woff2_path)
+    font.close()
+    print(f"  {os.path.basename(ttf_path)} -> {os.path.basename(woff2_path)}")
+
+
+
 def check_ttfautohint():
     """Verify ttfautohint is installed before starting the build."""
     if shutil.which("ttfautohint"):
@@ -1306,10 +1332,19 @@ def _build(tmp_dir, family=DEFAULT_FAMILY, outline_fix=True):
     _download_kobofix(kobofix_path)
     _run_kobofix(kobofix_path, variant_names)
 
+    # Step 6: Generate WOFF2 webfonts
+    print("\n── Step 6: Generate WOFF2 webfonts ──\n")
+    os.makedirs(OUT_WEB_DIR, exist_ok=True)
+    for name in variant_names:
+        ttf_path = os.path.join(OUT_TTF_DIR, f"{name}.ttf")
+        woff2_path = os.path.join(OUT_WEB_DIR, f"{name}.woff2")
+        convert_to_woff2(ttf_path, woff2_path)
+
     print("\n" + "=" * 60)
     print("  Build complete!")
-    print(f"  TTF fonts are in: {OUT_TTF_DIR}/")
-    print(f"  KF fonts are in:  {OUT_KF_DIR}/")
+    print(f"  TTF fonts are in:   {OUT_TTF_DIR}/")
+    print(f"  KF fonts are in:    {OUT_KF_DIR}/")
+    print(f"  Web fonts are in:   {OUT_WEB_DIR}/")
     print("=" * 60)
 
 
