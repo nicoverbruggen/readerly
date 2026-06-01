@@ -10,6 +10,7 @@ Orchestrates the full font build pipeline:
   4. Exports to TTF → ./out/ttf/
   5. Post-processes TTFs: style flags, kern pairs, glyph Y ceilings, autohinting
   6. Generates Kobo (KF) variants via kobofix.py → ./out/kf/
+  7. Generates WOFF2 webfonts → ./out/web/
 
 Uses FontForge (detected automatically).
 Run with: python3 build.py
@@ -66,6 +67,8 @@ VARIANT_STYLES = [
     ("Italic",     ITALIC_VF,  450, 9),
     ("BoldItalic", ITALIC_VF,  650, 9),
 ]
+
+KOBOFIX_URL = "https://raw.githubusercontent.com/nicoverbruggen/kobo-font-fix/v0.6/kobofix.py"
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # INLINE FONTFORGE SCRIPT CONFIG
@@ -1136,11 +1139,6 @@ def check_ttfautohint():
         file=sys.stderr,
     )
     sys.exit(1)
-
-
-KOBOFIX_URL = (
-    "https://raw.githubusercontent.com/nicoverbruggen/kobo-font-fix/v0.5.3/kobofix.py"
-)
 
 
 def _download_kobofix(dest):
