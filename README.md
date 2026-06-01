@@ -14,15 +14,19 @@ To get to the final result, I decided to use the variable font and work on it. T
 
 ## Downloads
 
-Three versions are generated via the pipeline of the [latest release](../../releases/latest):
+Three versions are generated via the pipeline of the [latest release](../../releases/latest).
 
-- **KF_Readerly.zip** — Kobo-optimized TrueType fonts with a legacy kern table and `KF` prefix. Use this if you have a Kobo e-reader, this version contains optimizations made with [Kobo Font Fix](https://github.com/nicoverbruggen/kobo-font-fix).
-- **Readerly.zip** — The standard, unmodified fonts, as TrueType files. Useful for other e-readers and use on your desktop computer or smartphone.
-- **Readerly_Web.zip** — WOFF2 webfonts for use with `@font-face` in browsers.
+### 1. KF Readerly
 
-### Using the webfonts
+**Use this if you have a Kobo e-reader**, this version contains optimizations and fixes made with [Kobo Font Fix](https://github.com/nicoverbruggen/kobo-font-fix). These are Kobo-optimized TrueType fonts with a legacy kern table and `KF` prefix.
 
-Extract `Readerly_Web.zip` into your project (e.g. into a `/fonts/` directory) and add the following to your CSS:
+### 2. Readerly
+
+The standard, non-Kobo fonts, as TrueType files. Useful for other e-readers and use on your desktop computer or smartphone.
+
+### 3. Readerly Web
+
+WOFF2 webfonts for use with `@font-face` in browsers. You can use this CSS as the basis:
 
 ```css
 @font-face {
@@ -53,13 +57,16 @@ Extract `Readerly_Web.zip` into your project (e.g. into a `/fonts/` directory) a
   font-style: italic;
   font-display: swap;
 }
-
-body {
-  font-family: 'Readerly', Georgia, serif;
-}
 ```
 
-Adjust the `url()` paths to match where you placed the files.
+## System requirements
+
+- **Python 3**
+- **[fontTools](https://github.com/fonttools/fonttools)** — install with `pip install fonttools`
+- **[brotli](https://pypi.org/project/Brotli/)** — required for WOFF2 generation; install with `pip install brotli`
+- **[skia-pathops](https://pypi.org/project/skia-pathops/)** — required by Kobo Font Fix for outline simplification; install with `pip install skia-pathops`
+- **[FontForge](https://fontforge.org)** — the build script auto-detects FontForge from PATH, Flatpak, or the macOS app bundle
+- **[ttfautohint](https://freetype.org/ttfautohint/)** — required for proper rendering on Kobo e-readers
 
 ## Project structure
 
@@ -75,67 +82,8 @@ After running `build.py`, you should get:
 - `out/kf`: Kobo-optimized TTF fonts (generated)
 - `out/web`: WOFF2 webfonts (generated)
 
-## Prerequisites
-
-- **Python 3**
-- **[fontTools](https://github.com/fonttools/fonttools)** — install with `pip install fonttools`
-- **[brotli](https://pypi.org/project/Brotli/)** — required for WOFF2 generation; install with `pip install brotli`
-- **[FontForge](https://fontforge.org)** — the build script auto-detects FontForge from PATH, Flatpak, or the macOS app bundle
-- **[ttfautohint](https://freetype.org/ttfautohint/)** — required for proper rendering on Kobo e-readers
-
-### Linux preparation
-
-```
-sudo apt install ttfautohint        # Debian/Ubuntu
-sudo dnf install ttfautohint        # Fedora
-brew install ttfautohint            # Bazzite (immutable Fedora)
-pip install fonttools brotli
-flatpak install flathub org.fontforge.FontForge
-```
-
-### macOS preparation
-
-#### System Python
-
-On macOS, if you're using the built-in version of Python (via Xcode), you may need to first add a folder to your `PATH` to make `font-line` available, like:
-
-```bash
-echo 'export PATH="$HOME/Library/Python/3.9/bin:$PATH"' >> ~/.zshrc
-brew install fontforge ttfautohint
-brew unlink python3 # ensure that python3 isn't linked via Homebrew
-pip3 install fonttools font-line brotli
-source ~/.zshrc
-```
-
-#### Homebrew Python
-
-If you're using `brew install python`, pip requires a virtual environment:
-
-```bash
-brew install fontforge ttfautohint
-python3 -m venv .venv
-source .venv/bin/activate
-pip install fonttools brotli
-```
+The build script (`build.py`) uses `fontTools` and FontForge to transform the Newsreader variable fonts into Readerly. After export, it post-processes the TTFs: clamping x-height overshoots that cause uneven rendering on e-ink, normalizing style flags, and autohinting with `ttfautohint` for Kobo's FreeType renderer. Configuration and step-by-step details live in the header comments of `build.py`.
 
 ## Building
 
-**Note**: If you're using `venv`, you will need to activate it first:
-
-```
-source .venv/bin/activate
-```
-
-If you are just using the system Python, you can skip that step and simply run:
-
-```
-python3 build.py
-```
-
-To customize the font family name, disable old-style kerning, or skip outline fixes:
-
-```
-python3 build.py --customize
-```
-
-The build script (`build.py`) uses `fontTools` and FontForge to transform the Newsreader variable fonts into Readerly. After export, it post-processes the TTFs: clamping x-height overshoots that cause uneven rendering on e-ink, normalizing style flags, and autohinting with `ttfautohint` for Kobo's FreeType renderer. Configuration and step-by-step details live in the header comments of `build.py`.
+If you want to build the font yourself, you can use the `fntbld-oci` container or build it natively. You can find instructions on how to do so in [BUILD.md](./BUILD.md).
