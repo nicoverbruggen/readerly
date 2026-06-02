@@ -1043,6 +1043,29 @@ def apply_glyph_y_bottom_target(ttf_path):
     font.close()
 
 
+def apply_glyph_patches(ttf_path):
+    """Apply reproducible per-glyph outline patches from scripts/glyph_patches/.
+
+    These are surgical, idempotent edits to individual glyphs that are awkward
+    to express as global rules — e.g. softening the bowl→foot bracket spur on
+    u/b/d. Each patch is self-guarding (it refuses to touch an outline that
+    doesn't match what it was authored against), so this is safe to re-run.
+    Authored for the Regular style; callers gate on that.
+    """
+    runner = os.path.join(ROOT_DIR, "scripts", "glyph_patches", "apply.py")
+    if not os.path.isfile(runner):
+        print("  [warn] glyph_patches/apply.py not found, skipping", file=sys.stderr)
+        return
+    result = subprocess.run(
+        [sys.executable, runner, ttf_path], capture_output=True, text=True,
+    )
+    if result.stdout.strip():
+        print(result.stdout.rstrip())
+    if result.returncode != 0:
+        msg = result.stderr.strip() or "a patch was skipped (outline mismatch)"
+        print(f"  [warn] glyph patches: {msg}", file=sys.stderr)
+
+
 def autohint_ttf(ttf_path):
     """Run ttfautohint to add proper TrueType hinting.
 
@@ -1337,6 +1360,8 @@ def _build(tmp_dir, family=DEFAULT_FAMILY, outline_fix=True):
         apply_glyph_y_ceiling(ttf_path)
         apply_glyph_y_floor(ttf_path)
         apply_glyph_y_bottom_target(ttf_path)
+        if style_suffix == "Regular":
+            apply_glyph_patches(ttf_path)
         autohint_ttf(ttf_path)
 
 
