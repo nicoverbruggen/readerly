@@ -31,6 +31,7 @@ glyph_inspect.sh wrapper does that for you. Importable too:
 import argparse
 import os
 import sys
+import tempfile
 
 from fontTools.ttLib import TTFont
 import freetype
@@ -70,7 +71,7 @@ def _parse_points(spec, npoints):
 
 
 def render(font_path, char, edits=None, points="all", region="full",
-           ppem=900, label=None, fill=0.22, markers=True):
+           ppem=900, label=None, fill=0.22, markers=True, baseline=True):
     """Render one glyph's annotated outline to a PIL RGB image."""
     f = TTFont(font_path)
     cmap = f.getBestCmap()
@@ -82,7 +83,13 @@ def render(font_path, char, edits=None, points="all", region="full",
         for i, xy in edits.items():
             glyph.coordinates[i] = xy
         glyph.recalcBounds(f["glyf"])
-        render_path = font_path + ".inspect.tmp.ttf"
+        tmp = tempfile.NamedTemporaryFile(
+            prefix=os.path.basename(font_path) + ".",
+            suffix=".inspect.tmp.ttf",
+            dir=os.path.dirname(font_path) or ".",
+            delete=False)
+        tmp.close()
+        render_path = tmp.name
         f.save(render_path)
     else:
         render_path = font_path
@@ -107,7 +114,8 @@ def render(font_path, char, edits=None, points="all", region="full",
     d = ImageDraw.Draw(img)
     baseline_y = MY + top
     originx = MX - left
-    d.line([(0, baseline_y), (W, baseline_y)], fill=(220, 30, 30))
+    if baseline:
+        d.line([(0, baseline_y), (W, baseline_y)], fill=(220, 30, 30))
     if label:
         d.text((6, 6), label, fill=(0, 0, 0))
 
@@ -151,6 +159,7 @@ def cmd_outline(args):
     for ch in args.chars:
         img = render(args.font, ch, edits=edits, points=args.points,
                      region=args.region, ppem=args.ppem, markers=args.markers,
+                     baseline=args.baseline,
                      label=f"{args.label or os.path.basename(args.font)} {ch}".strip())
         p = os.path.join(args.out, f"outline-{ch}.png")
         img.save(p)
@@ -165,6 +174,7 @@ def cmd_variants(args):
         panels.append(render(args.font, args.char, edits=edits,
                              points=args.points, region=args.region,
                              ppem=args.ppem, markers=args.markers,
+                             baseline=args.baseline,
                              label=label or "base"))
     out = args.out or f"glyph-variants-{args.char}.png"
     os.makedirs(os.path.dirname(out) or ".", exist_ok=True)
@@ -187,6 +197,8 @@ def build_parser():
     o.add_argument("--label", default="")
     o.add_argument("--no-points", dest="markers", action="store_false",
                    help="render the clean filled glyph without point markers")
+    o.add_argument("--no-baseline", dest="baseline", action="store_false",
+                   help="render without the baseline guide")
     o.add_argument("--out", default="glyph-outlines")
     o.set_defaults(func=cmd_outline)
 
@@ -200,6 +212,8 @@ def build_parser():
     v.add_argument("--ppem", type=int, default=900)
     v.add_argument("--no-points", dest="markers", action="store_false",
                    help="render clean filled glyphs without point markers")
+    v.add_argument("--no-baseline", dest="baseline", action="store_false",
+                   help="render without the baseline guide")
     v.add_argument("--out", default="")
     v.set_defaults(func=cmd_variants)
     return p
