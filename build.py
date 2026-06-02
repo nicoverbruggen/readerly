@@ -650,6 +650,7 @@ def clean_ttf_degenerate_contours(ttf_path):
 def add_synthetic_mark_glyphs(ttf_path):
     """Add missing precomposed mark glyphs as simple outlines."""
     try:
+        import math
         import unicodedata
         from fontTools.pens.basePen import DecomposingPen
         from fontTools.pens.boundsPen import BoundsPen
@@ -669,6 +670,15 @@ def add_synthetic_mark_glyphs(ttf_path):
     hmtx = font["hmtx"]
     cmap_tables = [table for table in font["cmap"].tables if table.isUnicode()]
     glyph_name_by_cp = dict(font.getBestCmap())
+
+    # Horizontal shift per unit of height for slanted (italic) designs. A mark
+    # is centred on the base's bbox midpoint, but in an italic the base leans,
+    # so its centreline at the mark's height is offset from that midpoint by
+    # slant * (height delta). post.italicAngle is the CCW angle from vertical
+    # (negative for right-leaning italics), so slant = tan(-italicAngle) is
+    # positive and shifts above-marks rightwards. Zero for upright fonts.
+    italic_angle = getattr(font.get("post"), "italicAngle", 0) or 0
+    slant = math.tan(math.radians(-italic_angle))
 
     def glyph_bounds(name):
         glyph_set = font.getGlyphSet()
@@ -739,10 +749,15 @@ def add_synthetic_mark_glyphs(ttf_path):
             for mark_name in mark_names:
                 glyph_set = font.getGlyphSet()
                 mark_bounds = glyph_bounds(mark_name)
-                x_offset = int(round(center_x(current_bounds) - center_x(mark_bounds)))
                 y_offset = DOTBELOW_Y_OFFSET if mark_name == "dotbelowcomb" else 0
                 if mark_bounds[1] > 0 and current_bounds[3] >= mark_bounds[1]:
                     y_offset = int(round(current_bounds[3] - mark_bounds[1] + 50))
+                # Centre on the base's slanted centreline at the mark's height,
+                # not its bbox midpoint, so marks sit over italic letterforms.
+                base_center_y = (current_bounds[1] + current_bounds[3]) / 2
+                mark_center_y = (mark_bounds[1] + mark_bounds[3]) / 2 + y_offset
+                target_x = center_x(current_bounds) + slant * (mark_center_y - base_center_y)
+                x_offset = int(round(target_x - center_x(mark_bounds)))
                 glyph_set[mark_name].draw(
                     TransformPen(pen, (1, 0, 0, 1, x_offset, y_offset))
                 )
