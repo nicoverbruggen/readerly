@@ -122,6 +122,30 @@ GLYPH_Y_CEILING = [
     ("u", 1062),  # flatten tiny top serif tips to platform level
 ]
 
+# Per-glyph Y floor: lift shallow baseline overshoots/feet back onto y=0.
+# This keeps flat-baseline lowercase letters on the same raster row at larger
+# ppem sizes. Descenders and marks are intentionally excluded.
+GLYPH_Y_FLOOR = [
+    ("a", 0),
+    ("b", 0),
+    ("c", 0),
+    ("d", 0),
+    ("e", 0),
+    ("o", 0),
+    ("s", 0),
+    ("t", 0),
+    ("u", 0),
+    ("v", 0),
+    ("w", 0),
+]
+
+# Per-glyph bottom target: deepen selected descenders to match the shared
+# descender depth of g/j/y. Only the current lowest points are moved.
+GLYPH_Y_BOTTOM_TARGET = [
+    ("p", -519),
+    ("q", -519),
+]
+
 # Explicit kern pairs: (left_glyph, right_glyph, kern_value_in_units).
 # Negative values tighten spacing. These are added on top of any existing
 # kerning from the source variable font.
@@ -960,11 +984,78 @@ def apply_glyph_y_ceiling(ttf_path):
                 coords[j] = (coords[j][0], max_y)
                 clamped += 1
         if clamped:
+            if hasattr(g, "recalcBounds"):
+                g.recalcBounds(glyf)
             modified.append(f"{glyph_name}({clamped}pts)")
 
     if modified:
         font.save(ttf_path)
         print(f"  Clamped Y ceiling: {', '.join(modified)}")
+    font.close()
+
+
+def apply_glyph_y_floor(ttf_path):
+    """Clamp shallow glyph points below a Y floor up to the floor value."""
+    if not GLYPH_Y_FLOOR:
+        return
+
+    from fontTools.ttLib import TTFont
+    font = TTFont(ttf_path)
+    glyf = font["glyf"]
+    modified = []
+
+    for glyph_name, min_y in GLYPH_Y_FLOOR:
+        g = glyf.get(glyph_name)
+        if not g or not g.numberOfContours or g.numberOfContours <= 0:
+            continue
+        coords = g.coordinates
+        clamped = 0
+        for j in range(len(coords)):
+            if coords[j][1] < min_y:
+                coords[j] = (coords[j][0], min_y)
+                clamped += 1
+        if clamped:
+            if hasattr(g, "recalcBounds"):
+                g.recalcBounds(glyf)
+            modified.append(f"{glyph_name}({clamped}pts)")
+
+    if modified:
+        font.save(ttf_path)
+        print(f"  Clamped Y floor: {', '.join(modified)}")
+    font.close()
+
+
+def apply_glyph_y_bottom_target(ttf_path):
+    """Move only the lowest glyph points down to a target Y value."""
+    if not GLYPH_Y_BOTTOM_TARGET:
+        return
+
+    from fontTools.ttLib import TTFont
+    font = TTFont(ttf_path)
+    glyf = font["glyf"]
+    modified = []
+
+    for glyph_name, target_y in GLYPH_Y_BOTTOM_TARGET:
+        g = glyf.get(glyph_name)
+        if not g or not g.numberOfContours or g.numberOfContours <= 0:
+            continue
+        coords = g.coordinates
+        current_min = min(y for _x, y in coords)
+        if current_min <= target_y:
+            continue
+        moved = 0
+        for j in range(len(coords)):
+            if coords[j][1] == current_min:
+                coords[j] = (coords[j][0], target_y)
+                moved += 1
+        if moved:
+            if hasattr(g, "recalcBounds"):
+                g.recalcBounds(glyf)
+            modified.append(f"{glyph_name}({current_min}->{target_y}, {moved}pts)")
+
+    if modified:
+        font.save(ttf_path)
+        print(f"  Set Y bottom targets: {', '.join(modified)}")
     font.close()
 
 
@@ -1320,6 +1411,8 @@ def _build(tmp_dir, family=DEFAULT_FAMILY, outline_fix=True):
         fix_ttf_version_names(ttf_path)
         add_kern_pairs(ttf_path)
         apply_glyph_y_ceiling(ttf_path)
+        apply_glyph_y_floor(ttf_path)
+        apply_glyph_y_bottom_target(ttf_path)
         autohint_ttf(ttf_path)
 
 
