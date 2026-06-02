@@ -72,7 +72,6 @@ KOBOFIX_URL = "https://raw.githubusercontent.com/nicoverbruggen/kobo-font-fix/v0
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # INLINE FONTFORGE SCRIPT CONFIG
-# (Migrated from ./scripts for readability and single-file builds.)
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 #
 # Step 2: Scaling + overlap cleanup
@@ -104,23 +103,6 @@ AUTOHINT_OPTS = [
 # Points above max_y are clamped down to max_y.
 GLYPH_Y_CEILING = [
     ("u", 1062),  # flatten tiny top serif tips to platform level
-]
-
-# Per-glyph Y floor: lift shallow baseline overshoots/feet back onto y=0.
-# This keeps flat-baseline lowercase letters on the same raster row at larger
-# ppem sizes. Descenders and marks are intentionally excluded.
-GLYPH_Y_FLOOR = [
-    ("a", 0),
-    ("b", 0),
-    ("c", 0),
-    ("d", 0),
-    ("e", 0),
-    ("o", 0),
-    ("s", 0),
-    ("t", 0),
-    ("u", 0),
-    ("v", 0),
-    ("w", 0),
 ]
 
 # Per-glyph bottom target: deepen selected descenders to match the shared
@@ -242,9 +224,9 @@ def build_per_font_script(open_path, save_path, steps):
     as the font variable.
     """
     parts = [
-        f'import fontforge',
+        'import fontforge',
         f'f = fontforge.open({open_path!r})',
-        f'print("\\nOpened: " + f.fontname + "\\n")',
+        'print("\\nOpened: " + f.fontname + "\\n")',
     ]
     for label, body in steps:
         parts.append(f'print("── {label} ──\\n")')
@@ -314,7 +296,7 @@ def ff_remove_overlaps_script():
 
 
 def ff_metrics_script():
-    """FontForge script: measure landmarks and set OS/2 Typo metrics."""
+    """FontForge script: measure landmarks, set x-height/cap-height, enable USE_TYPO_METRICS."""
     return textwrap.dedent("""\
 def _bbox(name):
     # Return bounding box (xmin, ymin, xmax, ymax) or None.
@@ -392,24 +374,13 @@ if design_top is None or design_bot is None:
         "       Make sure your font contains basic Latin glyphs (H, b, p, etc.)."
     )
 
-typo_ascender  = int(round(design_top))
-typo_descender = int(round(design_bot))
-
-f.os2_typoascent  = typo_ascender
-f.os2_typodescent = typo_descender
-f.os2_typolinegap = 0
-
+# Typo, Win and hhea ascender/descender/linegap are all set by the line-height
+# step that runs next; here we only record x-height and cap-height and enable
+# USE_TYPO_METRICS.
 if hasattr(f, "os2_xheight") and xht_h is not None:
     f.os2_xheight = int(round(xht_h))
 if hasattr(f, "os2_capheight") and cap_h is not None:
     f.os2_capheight = int(round(cap_h))
-
-# Win/hhea set to same initial values; lineheight step overrides these.
-f.os2_winascent  = typo_ascender
-f.os2_windescent = abs(typo_descender)
-f.hhea_ascent    = typo_ascender
-f.hhea_descent   = typo_descender
-f.hhea_linegap   = 0
 
 typo_metrics_set = False
 
@@ -429,11 +400,8 @@ if not typo_metrics_set:
     print("  WARNING: Could not set USE_TYPO_METRICS programmatically.")
     print("  -> In Font Info -> OS/2 -> Misc, tick 'USE_TYPO_METRICS'.\\n")
 
-typo_line = typo_ascender - typo_descender
-
 print(f"\\n─── Applied metrics ───\\n")
 print(f"  UPM:  {upm}")
-print(f"  Typo: {typo_ascender} / {typo_descender} (ink span: {typo_line}, {typo_line/upm:.2f}x UPM)")
 
 if cap_h is not None:
     print(f"  Cap height:   {int(cap_h)}")
@@ -993,37 +961,6 @@ def apply_glyph_y_ceiling(ttf_path):
     font.close()
 
 
-def apply_glyph_y_floor(ttf_path):
-    """Clamp shallow glyph points below a Y floor up to the floor value."""
-    if not GLYPH_Y_FLOOR:
-        return
-
-    from fontTools.ttLib import TTFont
-    font = TTFont(ttf_path)
-    glyf = font["glyf"]
-    modified = []
-
-    for glyph_name, min_y in GLYPH_Y_FLOOR:
-        g = glyf.get(glyph_name)
-        if not g or not g.numberOfContours or g.numberOfContours <= 0:
-            continue
-        coords = g.coordinates
-        clamped = 0
-        for j in range(len(coords)):
-            if coords[j][1] < min_y:
-                coords[j] = (coords[j][0], min_y)
-                clamped += 1
-        if clamped:
-            if hasattr(g, "recalcBounds"):
-                g.recalcBounds(glyf)
-            modified.append(f"{glyph_name}({clamped}pts)")
-
-    if modified:
-        font.save(ttf_path)
-        print(f"  Clamped Y floor: {', '.join(modified)}")
-    font.close()
-
-
 def apply_glyph_y_bottom_target(ttf_path):
     """Move only the lowest glyph points down to a target Y value."""
     if not GLYPH_Y_BOTTOM_TARGET:
@@ -1107,7 +1044,7 @@ def autohint_ttf(ttf_path):
 
     tmp_path = ttf_path + ".autohint.tmp"
     result = subprocess.run(
-        ["ttfautohint"] + list(AUTOHINT_OPTS) + [ttf_path, tmp_path],
+        ["ttfautohint"] + AUTOHINT_OPTS + [ttf_path, tmp_path],
         capture_output=True, text=True,
     )
 
@@ -1340,7 +1277,7 @@ def _build(tmp_dir, family=DEFAULT_FAMILY, outline_fix=True):
         print(f"Processing: {name}")
         print("-" * 40)
 
-        # Set fontname so rename.py can detect the correct style suffix
+        # Set fontname so the rename step can detect the correct style suffix
         set_fontname = f'f.fontname = {name!r}'
         set_family   = f'FAMILY = {family!r}'
         set_version  = f'VERSION = {FONT_VERSION!r}'
@@ -1356,7 +1293,7 @@ def _build(tmp_dir, family=DEFAULT_FAMILY, outline_fix=True):
         ])
         run_fontforge_script(script)
 
-    # Step 4: Export to out/sfd and out/ttf
+    # Step 4: Export to out/ttf
     print("\n── Step 4: Export ──\n")
     os.makedirs(OUT_TTF_DIR, exist_ok=True)
 
@@ -1375,7 +1312,6 @@ def _build(tmp_dir, family=DEFAULT_FAMILY, outline_fix=True):
         fix_ttf_version_names(ttf_path)
         add_kern_pairs(ttf_path)
         apply_glyph_y_ceiling(ttf_path)
-        apply_glyph_y_floor(ttf_path)
         apply_glyph_y_bottom_target(ttf_path)
         apply_glyph_patches(ttf_path)
         autohint_ttf(ttf_path)
