@@ -95,24 +95,8 @@ SELECTION_HEIGHT = 1.3
 ASCENDER_RATIO = 0.8
 
 # Step 4: ttfautohint options (hinting for Kobo's FreeType renderer)
-# - Kobo uses FreeType grayscale, so the 1st char of --stem-width-mode
-#   matters: n=natural (least distortion), q=quantized, s=strong.
-# - x-height snapping is disabled to avoid inconsistent glyph heights.
 AUTOHINT_OPTS = [
-    "--no-info",
     "--stem-width-mode=nss",
-    "--increase-x-height=0",
-    '--x-height-snapping-exceptions=-',
-]
-
-# Baseline alignment: deepen the bottom anti-aliasing of non-serifed
-# glyphs via hinting-only touch deltas (no outline changes).  This
-# shifts their bottom points down during rasterization so they produce
-# more gray below the baseline, visually matching serifed characters.
-# Each entry is (shift_px, ppem_min, ppem_max).  Shifts are in pixels
-# (multiples of 1/8, max 1.0).  Set to empty list to disable.
-BASELINE_HINT_SHIFTS = [
-    (0.125, 6, 53),
 ]
 
 # Per-glyph Y ceiling: cap the top of specific glyphs to reduce
@@ -1059,49 +1043,6 @@ def apply_glyph_y_bottom_target(ttf_path):
     font.close()
 
 
-def _generate_baseline_shift_ctrl(ttf_path):
-    """Generate touch deltas to deepen bottom anti-aliasing of non-serifed glyphs.
-
-    For lowercase glyphs without a flat baseline (no serif foot), shifts
-    the bottom-most points down during rasterization.  Uses graduated
-    shifts from BASELINE_HINT_SHIFTS — stronger at small ppem sizes
-    where alignment is most noticeable.  No outline changes.
-    """
-    if not BASELINE_HINT_SHIFTS:
-        return ""
-
-    from fontTools.ttLib import TTFont
-    font = TTFont(ttf_path)
-    glyf = font["glyf"]
-    cmap = font.getBestCmap()
-    lines = []
-
-    for char in "abcdefghijklmnopqrstuvwxyz":
-        code = ord(char)
-        if code not in cmap:
-            continue
-        name = cmap[code]
-        g = glyf[name]
-        if not g.numberOfContours or g.numberOfContours <= 0:
-            continue
-        coords = g.coordinates
-        ys = set(c[1] for c in coords)
-        if 0 in ys:
-            continue  # has serif baseline
-        bottom_pts = [i for i, (x, y) in enumerate(coords) if y <= 0]
-        if not bottom_pts:
-            continue
-        pts_str = ", ".join(str(p) for p in bottom_pts)
-        for shift_px, ppem_min, ppem_max in BASELINE_HINT_SHIFTS:
-            shift = -abs(shift_px)
-            lines.append(
-                f"{name} touch {pts_str} yshift {shift:.3f} @ {ppem_min}-{ppem_max}"
-            )
-
-    font.close()
-    return "\n".join(lines)
-
-
 def autohint_ttf(ttf_path):
     """Run ttfautohint to add proper TrueType hinting.
 
@@ -1117,32 +1058,18 @@ def autohint_ttf(ttf_path):
     The resulting bytecode is baked into the font, so FreeType uses
     the TrueType interpreter instead of falling back to auto-hinting.
 
-    Additionally generates per-font touch deltas to deepen the
-    baseline anti-aliasing of non-serifed glyphs.
+    Uses AUTOHINT_OPTS, which is kept identical to kobofix's KF rehint
+    pass so the standalone TTF renders the same as the shipping KF font.
     """
     if not shutil.which("ttfautohint"):
         print("  [warn] ttfautohint not found, skipping", file=sys.stderr)
         return
 
-    # Generate control instructions for this specific font's points
-    ctrl_text = _generate_baseline_shift_ctrl(ttf_path)
-    ctrl_path = ttf_path + ".ctrl.tmp"
-    ctrl_count = 0
-    opts = list(AUTOHINT_OPTS)
-    if ctrl_text:
-        with open(ctrl_path, "w") as f:
-            f.write(ctrl_text)
-        opts += [f"--control-file={ctrl_path}"]
-        ctrl_count = ctrl_text.count("\n") + 1
-
     tmp_path = ttf_path + ".autohint.tmp"
     result = subprocess.run(
-        ["ttfautohint"] + opts + [ttf_path, tmp_path],
+        ["ttfautohint"] + list(AUTOHINT_OPTS) + [ttf_path, tmp_path],
         capture_output=True, text=True,
     )
-
-    if os.path.exists(ctrl_path):
-        os.remove(ctrl_path)
 
     if result.returncode != 0:
         print(f"  [warn] ttfautohint failed: {result.stderr.strip()}", file=sys.stderr)
@@ -1155,10 +1082,7 @@ def autohint_ttf(ttf_path):
     # than the longest emitted glyph program. Refresh it here so downstream
     # validators like ots-sanitize don't warn about stale maxp metadata.
     _fix_maxp_instruction_limit(ttf_path)
-    hint_msg = "Autohinted with ttfautohint"
-    if ctrl_count:
-        hint_msg += f" ({ctrl_count} serif control hints)"
-    print(f"  {hint_msg}")
+    print("  Autohinted with ttfautohint")
 
 
 def _fix_maxp_instruction_limit(ttf_path):
