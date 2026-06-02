@@ -16,11 +16,14 @@ glyph_patches/
   glyph_inspect.sh  container wrapper for glyph_inspect.py
   regular/          patches for the Regular style — one file per glyph
     u.py b.py d.py s.py
+  bold/             patches for the Bold style
+    u.py b.py d.py s.py
 ```
 
-Patches are **per style**. Only the Regular style has patches today; to patch
-another style, add a sibling folder (e.g. `bold/`) with the same one-file-per-
-glyph shape. A style with no folder is left untouched.
+Patches are **per style** (`regular/`, `bold/`, …); to patch another style, add
+a sibling folder with the same one-file-per-glyph shape. A style with no folder
+is left untouched. The same glyph in different styles has different outlines, so
+each style's patch carries its own point indices and coordinates.
 
 ## A patch file
 
