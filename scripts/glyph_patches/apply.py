@@ -14,9 +14,9 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from _lib import apply_patch  # noqa: E402
-import u, b, d  # noqa: E402
+import u, b, d, s  # noqa: E402
 
-PATCHES = [u, b, d]
+PATCHES = [u, b, d, s]
 
 
 def apply_all(path):
