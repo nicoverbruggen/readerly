@@ -132,6 +132,13 @@ SYNTHETIC_MARK_RANGES = [
 # separation at reading sizes.
 DOTBELOW_Y_OFFSET = -70
 
+# Optical x corrections for synthetic italic dotted capitals where generic
+# slanted bbox centering misses the source design's intended accent placement.
+ITALIC_DOTABOVE_X_ADJUST = {
+    0x0226: 120,   # Ȧ
+    0x1E8E: -150,  # Ẏ
+}
+
 # Step 3: Naming and style metadata (used by the rename step)
 STYLE_MAP = {
     "Regular":    ("Regular",     "Book", 400),
@@ -714,7 +721,7 @@ def add_synthetic_mark_glyphs(ttf_path):
             pen = DecomposingTTGlyphPen(glyph_set)
             glyph_set[base_name].draw(pen)
 
-            for mark_name in mark_names:
+            for mark_cp, mark_name in zip(parts[1:], mark_names):
                 glyph_set = font.getGlyphSet()
                 mark_bounds = glyph_bounds(mark_name)
                 y_offset = DOTBELOW_Y_OFFSET if mark_name == "dotbelowcomb" else 0
@@ -726,6 +733,8 @@ def add_synthetic_mark_glyphs(ttf_path):
                 mark_center_y = (mark_bounds[1] + mark_bounds[3]) / 2 + y_offset
                 target_x = center_x(current_bounds) + slant * (mark_center_y - base_center_y)
                 x_offset = int(round(target_x - center_x(mark_bounds)))
+                if slant and mark_cp == 0x0307:
+                    x_offset += ITALIC_DOTABOVE_X_ADJUST.get(codepoint, 0)
                 glyph_set[mark_name].draw(
                     TransformPen(pen, (1, 0, 0, 1, x_offset, y_offset))
                 )
