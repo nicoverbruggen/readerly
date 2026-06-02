@@ -1048,9 +1048,11 @@ def apply_glyph_patches(ttf_path):
 
     These are surgical, idempotent edits to individual glyphs that are awkward
     to express as global rules — e.g. softening the bowl→foot bracket spur on
-    u/b/d. Each patch is self-guarding (it refuses to touch an outline that
-    doesn't match what it was authored against), so this is safe to re-run.
-    Authored for the Regular style; callers gate on that.
+    u/b/d, or thickening the bottom of s. Patches are organised per style under
+    scripts/glyph_patches/<style>/; the runner infers the style from the font
+    filename and applies only that style's patches (so non-Regular styles, with
+    no subfolder, are untouched). Each patch is self-guarding, so this is safe
+    to run on every style and to re-run.
     """
     runner = os.path.join(ROOT_DIR, "scripts", "glyph_patches", "apply.py")
     if not os.path.isfile(runner):
@@ -1360,8 +1362,7 @@ def _build(tmp_dir, family=DEFAULT_FAMILY, outline_fix=True):
         apply_glyph_y_ceiling(ttf_path)
         apply_glyph_y_floor(ttf_path)
         apply_glyph_y_bottom_target(ttf_path)
-        if style_suffix == "Regular":
-            apply_glyph_patches(ttf_path)
+        apply_glyph_patches(ttf_path)
         autohint_ttf(ttf_path)
 
 

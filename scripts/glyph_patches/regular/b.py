@@ -5,13 +5,13 @@ Mirror of the 'u' fix: the left serif foot's inner bracket (on-curve point 38)
 juts up ~149 units between the bowl and the foot. Lower the spur peak and ease
 the off-curve control approaching it. Idempotent and self-guarding.
 
-    python3 scripts/glyph_patches/b.py path/to/Readerly-Regular.ttf
+    python3 scripts/glyph_patches/regular/b.py path/to/Readerly-Regular.ttf
 """
 
 import os
 import sys
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from _lib import run_cli  # noqa: E402
 
 CHAR = "b"

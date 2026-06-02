@@ -12,13 +12,13 @@ that point was left at y=84 — level with the control and only 6 below the peak
 37 to y=76 mirrors 'u' (76→84→90) and restores the smooth rise. The foot's
 lifted toe is intentionally left as-is, matching 'u'. Idempotent/self-guarding.
 
-    python3 scripts/glyph_patches/d.py path/to/Readerly-Regular.ttf
+    python3 scripts/glyph_patches/regular/d.py path/to/Readerly-Regular.ttf
 """
 
 import os
 import sys
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from _lib import run_cli  # noqa: E402
 
 CHAR = "d"

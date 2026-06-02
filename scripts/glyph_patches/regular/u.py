@@ -6,13 +6,13 @@ the bowl bottom and the foot, pinching the bowl's foot-side terminal into a
 sharp spur. This lowers the bracket peak and eases the adjacent off-curve
 control point so the bowl flows into the foot. Idempotent and self-guarding.
 
-    python3 scripts/glyph_patches/u.py path/to/Readerly-Regular.ttf
+    python3 scripts/glyph_patches/regular/u.py path/to/Readerly-Regular.ttf
 """
 
 import os
 import sys
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from _lib import run_cli  # noqa: E402
 
 CHAR = "u"

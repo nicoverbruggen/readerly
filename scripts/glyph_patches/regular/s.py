@@ -14,13 +14,13 @@ black stroke grows while the outer edge stays flat on the baseline. Point 32
 
 Idempotent and self-guarding.
 
-    python3 scripts/glyph_patches/s.py path/to/Readerly-Regular.ttf
+    python3 scripts/glyph_patches/regular/s.py path/to/Readerly-Regular.ttf
 """
 
 import os
 import sys
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from _lib import run_cli  # noqa: E402
 
 CHAR = "s"
