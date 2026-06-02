@@ -70,7 +70,7 @@ def _parse_points(spec, npoints):
 
 
 def render(font_path, char, edits=None, points="all", region="full",
-           ppem=900, label=None, fill=0.22):
+           ppem=900, label=None, fill=0.22, markers=True):
     """Render one glyph's annotated outline to a PIL RGB image."""
     f = TTFont(font_path)
     cmap = f.getBestCmap()
@@ -111,16 +111,17 @@ def render(font_path, char, edits=None, points="all", region="full",
     if label:
         d.text((6, 6), label, fill=(0, 0, 0))
 
-    show = _parse_points(points, len(coords))
-    for i, (x, y) in enumerate(coords):
-        px, py = originx + x * scale, baseline_y - y * scale
-        on = flags[i] & 1
-        r = 6
-        col = (200, 0, 0) if on else (0, 80, 220)
-        (d.rectangle if on else d.ellipse)(
-            [px - r, py - r, px + r, py + r], outline=col, width=2)
-        if i in show:
-            d.text((px + 8, py - 7), str(i), fill=(0, 0, 0))
+    if markers:
+        show = _parse_points(points, len(coords))
+        for i, (x, y) in enumerate(coords):
+            px, py = originx + x * scale, baseline_y - y * scale
+            on = flags[i] & 1
+            r = 6
+            col = (200, 0, 0) if on else (0, 80, 220)
+            (d.rectangle if on else d.ellipse)(
+                [px - r, py - r, px + r, py + r], outline=col, width=2)
+            if i in show:
+                d.text((px + 8, py - 7), str(i), fill=(0, 0, 0))
 
     f.close()
     if render_path != font_path:
@@ -149,7 +150,7 @@ def cmd_outline(args):
     edits = parse_edits(args.set_) if args.set_ else None
     for ch in args.chars:
         img = render(args.font, ch, edits=edits, points=args.points,
-                     region=args.region, ppem=args.ppem,
+                     region=args.region, ppem=args.ppem, markers=args.markers,
                      label=f"{args.label or os.path.basename(args.font)} {ch}".strip())
         p = os.path.join(args.out, f"outline-{ch}.png")
         img.save(p)
@@ -163,7 +164,8 @@ def cmd_variants(args):
         edits = parse_edits(edit_spec) if edit_spec.strip() else None
         panels.append(render(args.font, args.char, edits=edits,
                              points=args.points, region=args.region,
-                             ppem=args.ppem, label=label or "base"))
+                             ppem=args.ppem, markers=args.markers,
+                             label=label or "base"))
     out = args.out or f"glyph-variants-{args.char}.png"
     os.makedirs(os.path.dirname(out) or ".", exist_ok=True)
     hstack(panels).save(out)
@@ -183,6 +185,8 @@ def build_parser():
     o.add_argument("--region", default="full", choices=list(REGIONS))
     o.add_argument("--ppem", type=int, default=900)
     o.add_argument("--label", default="")
+    o.add_argument("--no-points", dest="markers", action="store_false",
+                   help="render the clean filled glyph without point markers")
     o.add_argument("--out", default="glyph-outlines")
     o.set_defaults(func=cmd_outline)
 
@@ -194,6 +198,8 @@ def build_parser():
     v.add_argument("--points", default="all")
     v.add_argument("--region", default="full", choices=list(REGIONS))
     v.add_argument("--ppem", type=int, default=900)
+    v.add_argument("--no-points", dest="markers", action="store_false",
+                   help="render clean filled glyphs without point markers")
     v.add_argument("--out", default="")
     v.set_defaults(func=cmd_variants)
     return p

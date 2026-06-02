@@ -52,7 +52,8 @@ def load_patches(style):
 def apply_all(path):
     """Apply the patches matching this font's style. Returns {char: result}."""
     style = style_from_path(path)
-    return {m.CHAR: apply_patch(path, m.CHAR, m.ORIGINAL, m.TARGET, m.LABEL)
+    return {m.CHAR: apply_patch(path, m.CHAR, m.ORIGINAL, m.TARGET, m.LABEL,
+                                getattr(m, "REMOVE", None))
             for m in load_patches(style)}
 
 
