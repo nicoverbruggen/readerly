@@ -1,3 +1,6 @@
+> [!NOTE]
+> If you like Readerly, you should probably go check out its successor: **[Libron](https://github.com/nicoverbruggen/libron)**, which has further iterated upon this design. I think it's better! It's likely that my work on Readerly has concluded for now.
+
 # Readerly
 
 **Readerly** is modified font based on [Newsreader](https://github.com/productiontype/Newsreader), while attempting to be metrically very similar to [Bookerly](https://en.wikipedia.org/wiki/Bookerly), the default font on Kindle devices, to provide a similar reading experience.
