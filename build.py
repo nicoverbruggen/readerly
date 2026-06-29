@@ -68,7 +68,7 @@ VARIANT_STYLES = [
     ("BoldItalic", ITALIC_VF,  650, 9),
 ]
 
-KOBOFIX_URL = "https://raw.githubusercontent.com/nicoverbruggen/kobo-font-fix/v0.6/kobofix.py"
+KOBOFIX_URL = "https://raw.githubusercontent.com/nicoverbruggen/kobo-font-fix/v0.8/kobofix.py"
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # INLINE FONTFORGE SCRIPT CONFIG
