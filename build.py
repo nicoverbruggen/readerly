@@ -68,7 +68,7 @@ VARIANT_STYLES = [
     ("BoldItalic", ITALIC_VF,  650, 9),
 ]
 
-KOBOFIX_URL = "https://raw.githubusercontent.com/nicoverbruggen/kobo-font-fix/v0.8/kobofix.py"
+KOBOFIX_URL = "https://raw.githubusercontent.com/nicoverbruggen/kobo-font-fix/v0.9.2/kobofix.py"
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # INLINE FONTFORGE SCRIPT CONFIG
@@ -821,6 +821,15 @@ def fix_ttf_version_names(ttf_path):
     name_table = font["name"]
     name_table.setName(version_string, 5, 1, 0, 0)
     name_table.setName(version_string, 5, 3, 1, 0x409)
+    # Name ID 3 goes stale the same way name ID 5 does, and the source fonts leave
+    # it without a version at all. Build it from the full name so each style gets
+    # its own ID, and pin the version to VERSION. This matches the unique ID that
+    # kobofix writes for the KF variants.
+    full_name = name_table.getDebugName(4) or name_table.getDebugName(1)
+    if full_name:
+        unique_id = f"{full_name}:{version_string}"
+        name_table.setName(unique_id, 3, 1, 0, 0)
+        name_table.setName(unique_id, 3, 3, 1, 0x409)
     font.save(ttf_path)
     font.close()
     print(f"  Normalized version names to {version_string}")
