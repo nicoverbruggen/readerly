@@ -8,9 +8,10 @@ Orchestrates the full font build pipeline:
   2. Scales, condenses, and cleans up overlaps via FontForge
   3. Applies vertical metrics, line height, rename, version, and license via FontForge
   4. Exports to TTF → ./out/ttf/
-  5. Post-processes TTFs: style flags, kern pairs, glyph Y ceilings, autohinting
-  6. Generates Kobo (KF) variants via kobofix.py → ./out/kf/
-  7. Generates WOFF2 webfonts → ./out/web/
+  5. Adds glyph corrections, Polish alternates, and small caps
+  6. Post-processes TTFs: style flags, kern pairs, glyph Y ceilings, autohinting
+  7. Generates Kobo (KF) variants via kobofix.py → ./out/kf/
+  8. Generates WOFF2 webfonts → ./out/web/
 
 Uses FontForge (detected automatically).
 Run with: python3 build.py
@@ -773,6 +774,27 @@ def add_synthetic_mark_glyphs(ttf_path):
     font.close()
 
 
+def fix_polish_mark_filtering(ttf_path):
+    """Include localized marks in the source font's mark-filtering sets.
+
+    FontForge exports the new anchors but does not extend existing GDEF sets.
+    Without this, a diaeresis above a Polish acute attaches to the base again.
+    """
+    from fontTools.ttLib import TTFont
+
+    with TTFont(ttf_path) as font:
+        sets = getattr(font["GDEF"].table, "MarkGlyphSetsDef", None)
+        if sets is None:
+            return
+        glyph_order = {name: i for i, name in enumerate(font.getGlyphOrder())}
+        for coverage in sets.Coverage:
+            members = set(coverage.glyphs)
+            members.update(name + ".loclPLK" for name in coverage.glyphs
+                           if name + ".loclPLK" in glyph_order)
+            coverage.glyphs = sorted(members, key=glyph_order.__getitem__)
+        font.save(ttf_path)
+
+
 def fix_ttf_style_flags(ttf_path, style_suffix):
     """Normalize OS/2 fsSelection and head.macStyle for style linking."""
     try:
@@ -1301,6 +1323,13 @@ def _build(tmp_dir, family=DEFAULT_FAMILY, outline_fix=True):
         if outline_fix:
             clean_ttf_degenerate_contours(ttf_path)
         add_synthetic_mark_glyphs(ttf_path)
+        run_fontforge_script(
+            "import sys\n"
+            f"sys.path.insert(0, {os.path.join(ROOT_DIR, 'scripts')!r})\n"
+            "from apply_parity import main\n"
+            f"main({ttf_path!r}, {style_suffix!r})"
+        )
+        fix_polish_mark_filtering(ttf_path)
         fix_ttf_style_flags(ttf_path, style_suffix)
         fix_ttf_version_names(ttf_path)
         add_kern_pairs(ttf_path)

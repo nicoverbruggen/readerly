@@ -1,5 +1,5 @@
 > [!NOTE]
-> If you like Readerly, you should probably go check out its successor: **[Libron](https://github.com/nicoverbruggen/libron)**, which has further iterated upon this design. I think it's better! It's likely that my work on Readerly has concluded for now.
+> If you like Readerly, you should probably go check out its successor: **[Libron](https://github.com/nicoverbruggen/libron)**, which has further iterated upon this design. I think it's better! Readerly keeps the Newsreader letterforms, with selected glyph and typography improvements from Libron.
 
 # Readerly
 
@@ -14,6 +14,14 @@ I asked myself the question: how close can we get to the metrics of Bookerly whi
 The goal was to get a metrically/visually similar font, without actually copying glyphs or anything that would infringe upon the rights of the original creators; after all, Newsreader is a very beautiful font as a starting point.
 
 To get to the final result, I decided to use the variable font and work on it. The original is located in `src` and is available under the same OFL as the end result, which is included in `LICENSE`.
+
+## Typography
+
+Readerly includes small caps through `smcp` and `c2sc`, a drawn capital sharp S, and corrected caron and dot accents. The small caps are generated from Readerly's capitals with adjusted weight and spacing.
+
+Polish text uses steeper acute accents through the `locl` feature when the reader tags its language as Polish. The default accents remain available for other languages. Ogoneks have fuller outlines and adjusted attachment.
+
+Kobo's built-in reader uses its own simulated small caps. Readers that support `smcp` and `c2sc` can use the native forms.
 
 ## Downloads
 
@@ -73,7 +81,7 @@ WOFF2 webfonts for use with `@font-face` in browsers. You can use this CSS as th
 
 ## Project structure
 
-- `src`: Newsreader variable font TTFs
+- `src`: Newsreader variable font TTFs and selected Libron outlines in `src/parity`
 - `build.py`: The build script to generate Readerly
 - `LICENSE`: The OFL license
 - `COPYRIGHT`: Copyright information, later embedded in font

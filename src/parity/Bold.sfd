@@ -1,0 +1,190 @@
+SplineFontDB: 3.2
+FontName: ReaderlyParity-Bold
+FullName: Untitled2
+FamilyName: Readerly parity outlines
+Weight: Regular
+Copyright: Newsreader (c) 2020 The Newsreader Project Authors (http://github.com/productiontype/Newsreader)\nReaderly (c) 2026 Nico Verbruggen (https://github.com/nicoverbruggen/readerly)
+UComments: "2026-10-9: Created with FontForge (http://fontforge.org)"
+Version: 001.000
+ItalicAngle: 0
+UnderlinePosition: -200
+UnderlineWidth: 100
+Ascent: 1600
+Descent: 400
+InvalidEm: 0
+LayerCount: 2
+Layer: 0 0 "Back" 1
+Layer: 1 0 "Fore" 0
+XUID: [1021 428 1672033364 647067]
+OS2Version: 0
+OS2_WeightWidthSlopeOnly: 0
+OS2_UseTypoMetrics: 1
+CreationTime: 1791552216
+ModificationTime: 1791552216
+OS2TypoAscent: 0
+OS2TypoAOffset: 1
+OS2TypoDescent: 0
+OS2TypoDOffset: 1
+OS2TypoLinegap: 0
+OS2WinAscent: 0
+OS2WinAOffset: 1
+OS2WinDescent: 0
+OS2WinDOffset: 1
+HheadAscent: 0
+HheadAOffset: 1
+HheadDescent: 0
+HheadDOffset: 1
+OS2Vendor: 'PfEd'
+DEI: 91125
+Encoding: ISO8859-1
+UnicodeInterp: none
+NameList: AGL For New Fonts
+DisplaySize: -48
+AntiAlias: 1
+FitToEm: 0
+BeginChars: 261 5
+
+StartChar: acutecomb.loclPLK
+Encoding: 256 -1 0
+Width: 0
+VWidth: 0
+GlyphClass: 4
+Flags: HW
+LayerCount: 2
+Fore
+SplineSet
+-84 1106 m 1
+ -55 1433 l 1
+ 257 1433 l 1
+ 277 1380 l 1
+ 58 1106 l 1
+ -84 1106 l 1
+EndSplineSet
+EndChar
+
+StartChar: acutecomb.case.loclPLK
+Encoding: 257 -1 1
+Width: 0
+VWidth: 0
+GlyphClass: 1
+Flags: HW
+LayerCount: 2
+Fore
+SplineSet
+-81 1527 m 1
+ -28 1832 l 1
+ 285 1832 l 1
+ 301 1779 l 1
+ 63 1527 l 1
+ -81 1527 l 1
+EndSplineSet
+EndChar
+
+StartChar: ogonek
+Encoding: 258 731 2
+Width: 950
+VWidth: 0
+GlyphClass: 1
+Flags: HW
+LayerCount: 2
+EndChar
+
+StartChar: Aogonek
+Encoding: 259 260 3
+Width: 1645
+VWidth: 0
+GlyphClass: 1
+Flags: HW
+LayerCount: 2
+Fore
+SplineSet
+1245 -99 m 1
+ 1219 -141 1202.33333333 -173 1195 -195 c 0
+ 1187.66666667 -217 1184 -238 1184 -258 c 0
+ 1184 -278 1189.66666667 -292.666666667 1201 -302 c 0
+ 1212.33333333 -312 1227.66666667 -317 1247 -317 c 0
+ 1265.66666667 -317 1282.66666667 -315 1298 -311 c 0
+ 1313.33333333 -306.333333333 1332.66666667 -297.333333333 1356 -284 c 2
+ 1385 -268 l 1
+ 1397 -381 l 1
+ 1389 -388 l 2
+ 1362.33333333 -410.666666667 1337.66666667 -428.666666667 1315 -442 c 0
+ 1292.33333333 -456 1269.33333333 -465.666666667 1246 -471 c 0
+ 1222.66666667 -477 1197.66666667 -480 1171 -480 c 0
+ 1104.33333333 -480 1055 -464.333333333 1023 -433 c 0
+ 991 -401.666666667 975 -360.666666667 975 -310 c 0
+ 975 -286.666666667 978.333333333 -263.666666667 985 -241 c 0
+ 991.666666667 -218.333333333 1004.33333333 -193 1023 -165 c 0
+ 1041.66666667 -136.333333333 1069.33333333 -101.666666667 1106 -61 c 2
+ 1156 -6 l 1
+ 1162 1 l 1
+ 1109 146 l 1
+ 1007 425 l 1
+ 474 425 l 1
+ 379 148 l 1
+ 492 117 l 1
+ 492 0 l 1
+ 48 0 l 1
+ 48 113 l 1
+ 163 146 l 1
+ 624 1396 l 1
+ 998 1396 l 1
+ 1478 154 l 1
+ 1590 119 l 1
+ 1590 0 l 1
+ 1310 -0 l 1
+ 1245 -99 l 1
+732 1174 m 1
+ 539 614 l 1
+ 937 614 l 1
+ 732 1174 l 1
+EndSplineSet
+EndChar
+
+StartChar: uni1E9E
+Encoding: 260 7838 4
+Width: 1729
+VWidth: 0
+GlyphClass: 2
+Flags: HW
+LayerCount: 2
+Fore
+SplineSet
+89 0 m 1
+ 89 102 l 1
+ 253 152 l 1
+ 253 948 l 2
+ 253 1101.33333333 306 1218.66666667 412 1300 c 0
+ 517.333333333 1380.66666667 666 1421 858 1421 c 0
+ 1105.33333333 1421 1296.66666667 1370.33333333 1432 1269 c 1
+ 1163 874 l 1
+ 1311.66666667 827.333333333 1425 766.666666667 1503 692 c 0
+ 1579.66666667 618 1618 525.333333333 1618 414 c 0
+ 1618 320.666666667 1592.66666667 240.666666667 1542 174 c 0
+ 1491.33333333 107.333333333 1422.66666667 57.3333333333 1336 24 c 0
+ 1250.66666667 -8.66666666667 1152.66666667 -25 1042 -25 c 0
+ 960 -25 887.666666667 -5 825 35 c 1
+ 782 425 l 1
+ 916 425 l 1
+ 1030 186 l 1
+ 1056 174 1083.33333333 168 1112 168 c 0
+ 1170.66666667 168 1215 187.666666667 1245 227 c 0
+ 1275 266.333333333 1290 319.333333333 1290 386 c 0
+ 1290 415.333333333 1284.66666667 441.666666667 1274 465 c 0
+ 1262.66666667 490.333333333 1249.33333333 511 1234 527 c 0
+ 1216.66666667 545 1194.33333333 562.666666667 1167 580 c 0
+ 1143 594.666666667 1115.33333333 609.333333333 1084 624 c 0
+ 1049.33333333 640 1015.66666667 655 983 669 c 2
+ 850 727 l 1
+ 1165 1211 l 1
+ 1095.66666667 1229 1004.33333333 1238 891 1238 c 0
+ 791.666666667 1238 718 1210.33333333 670 1155 c 0
+ 622 1099.66666667 598 1021.66666667 598 921 c 2
+ 598 152 l 1
+ 707 102 l 1
+ 707 0 l 1
+ 89 0 l 1
+EndSplineSet
+EndChar
+EndChars
+EndSplineFont

@@ -41,3 +41,5 @@ source .venv/bin/activate
 pip install fonttools brotli skia-pathops
 python3 build.py
 ```
+
+The five outlines per style in `src/parity` come from Libron `develop` at commit `4a444ac`. The upright lowercase Polish alternates also include the later 50-unit acute placement correction. The build does not need a Libron checkout.
